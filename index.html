@@ -1,0 +1,1784 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Redbird Cannabis - Pre-Order Portal</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'DM Sans',-apple-system,BlinkMacSystemFont,"Segoe UI",Arial,sans-serif;background:#f2f2f0;color:#1a1a1a;min-height:100vh}
+
+/* TOPBAR */
+.topbar{background:#fff;border-bottom:1px solid #e8e8e6;padding:0 32px;height:52px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:100}
+.rb-logo{display:flex;align-items:center;gap:9px}
+.rb-logo img{height:28px;width:auto}
+.rb-brand{font-size:14px;font-weight:700;color:#1a1a1a}
+.topbar-right{display:flex;align-items:center;gap:16px}
+.topbar-date{font-size:12px;color:#aaa}
+.cart-badge-btn{display:none;align-items:center;gap:7px;background:#fff;border:1.5px solid #D2232A;border-radius:7px;padding:5px 14px;cursor:pointer;font-size:12px;color:#D2232A;font-weight:700;transition:all .15s}
+.cart-badge-btn:hover{background:#fce8e8}
+
+/* PAGE */
+.page{max-width:1200px;margin:0 auto;padding:32px 24px 80px}
+.screen{display:none}.screen.active{display:block}
+
+/* LOADING */
+.loading{text-align:center;padding:60px 20px;color:#999;font-size:14px}
+.loading .spinner{width:32px;height:32px;border:3px solid #eee;border-top-color:#D2232A;border-radius:50%;animation:spin .8s linear infinite;margin:0 auto 16px}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+/* ACCOUNT HEADER */
+.account-header{margin-bottom:24px}
+.account-name{font-size:24px;font-weight:800;margin-bottom:4px}
+.account-sub{font-size:13px;color:#aaa}
+
+/* WEEK CARDS */
+.week-card{background:#fff;border:1px solid #e8e8e6;border-radius:10px;padding:18px 22px;margin-bottom:10px;cursor:pointer;transition:border-color .15s,box-shadow .15s}
+.week-card:hover{border-color:#D2232A;box-shadow:0 2px 12px rgba(210,35,42,.07)}
+.week-card.has-cart{border-color:#D2232A}
+.week-card.projected{opacity:.65}
+.wk-top{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px}
+.wk-left{display:flex;align-items:center;gap:9px;flex-wrap:wrap}
+.wk-date{font-size:15px;font-weight:700}
+.badge{font-size:10px;font-weight:700;padding:2px 9px;border-radius:99px}
+.b-confirmed{background:#fce8e8;color:#a01818}
+.b-proj{background:#f0f0ee;color:#999}
+.wk-action{font-size:13px;font-weight:700;color:#D2232A;white-space:nowrap}
+.wk-cart-summary{font-size:11px;color:#D2232A;background:#fce8e8;padding:2px 9px;border-radius:99px;font-weight:700}
+.strain-groups{display:flex;flex-wrap:wrap;gap:14px;margin-top:4px}
+.sg-pill{display:inline-block;font-size:11px;color:#444;border:1px solid #e0e0de;border-radius:6px;padding:2px 9px;margin:2px 2px}
+.sg-pill.so{text-decoration:line-through;opacity:.5;background:#fdf5f5;border-color:#e8c8c8}
+
+/* URGENCY PILLS */
+.pill-almost{background:#FCEBEB;color:#791F1F;font-size:9px;font-weight:700;padding:1px 7px;border-radius:99px;margin-left:6px}
+.pill-going{background:#FAEEDA;color:#633806;font-size:9px;font-weight:700;padding:1px 7px;border-radius:99px;margin-left:6px}
+
+/* CATEGORY COLORS */
+.cat-pill{display:inline-block;font-size:10px;font-weight:700;padding:2px 9px;border-radius:99px;letter-spacing:.03em;margin-bottom:4px}
+.cat-flower{background:#EAF3DE;color:#27500A}
+.cat-joints{background:#FAEEDA;color:#633806}
+.cat-infused{background:#EEEDFE;color:#3C3489}
+.cat-liveresin{background:#E1F5EE;color:#085041}
+.cat-vape{background:#E1F5EE;color:#085041}
+
+/* ORDER SCREEN */
+.breadcrumb{font-size:13px;color:#999;margin-bottom:20px}
+.breadcrumb a{color:#D2232A;text-decoration:none;font-weight:600}
+.breadcrumb a:hover{text-decoration:underline}
+.order-layout{display:block}
+.order-products{width:100%}
+.cat-hdr{display:flex;align-items:center;gap:10px;margin:20px 0 10px;border-left:3px solid #D2232A;padding-left:12px}
+.cat-hdr:first-child{margin-top:0}
+.cat-name{font-size:16px;font-weight:700}
+.sku-blk{background:#f8f8f6;border-radius:8px;padding:12px 14px;margin-bottom:8px}
+.sku-lbl{font-size:10px;text-transform:uppercase;letter-spacing:.04em;color:#999;font-weight:700;margin-bottom:8px}
+.prod-row{display:flex;align-items:center;justify-content:space-between;padding:8px 0;border-bottom:1px solid #eee}
+.prod-row:last-child{border-bottom:none}
+.prod-row.so{opacity:.4}
+.prod-name{font-size:13px;font-weight:600;margin-right:6px}
+.prod-price{font-size:11px;color:#999}
+.add-btn{padding:5px 14px;background:#fff;border:1.5px solid #D2232A;color:#D2232A;border-radius:6px;font-size:11px;font-weight:700;cursor:pointer;transition:all .15s;font-family:inherit}
+.add-btn:hover{background:#fce8e8}
+.so-badge{font-size:10px;color:#ccc;background:#f5f5f3;padding:2px 8px;border-radius:4px}
+.so-block{font-size:11px;color:#ccc;padding:4px 0}
+.qty-ctrl{display:flex;align-items:center;gap:0;border:1.5px solid #D2232A;border-radius:6px;overflow:hidden}
+.qty-btn{width:28px;height:28px;background:#fff;border:none;color:#D2232A;font-size:15px;font-weight:700;cursor:pointer}
+.qty-btn:hover{background:#fce8e8}
+.qty-val{width:32px;text-align:center;border:none;font-size:13px;font-weight:700;font-family:inherit;background:#fff}
+
+/* FLOATING CART - fixed bottom-right, always visible when items exist */
+.floating-cart{position:fixed;bottom:24px;right:24px;width:340px;max-height:calc(100vh - 130px);background:#fff;border:1px solid #e8e8e6;border-radius:12px;box-shadow:0 8px 32px rgba(0,0,0,.16);z-index:90;display:none;flex-direction:column;overflow:hidden;font-family:inherit}
+.floating-cart.has-items{display:flex}
+.floating-cart.collapsed .fc-body,.floating-cart.collapsed .fc-footer{display:none}
+.fc-header{background:#1a1a1a;color:#fff;padding:12px 16px;cursor:pointer;display:flex;justify-content:space-between;align-items:center;flex-shrink:0;gap:12px}
+.fc-header-left{flex:1;min-width:0}
+.fc-acct-label{font-size:9px;text-transform:uppercase;letter-spacing:.08em;color:#999;font-weight:700}
+.fc-acct-name{font-size:14px;font-weight:700;color:#fff;line-height:1.2;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.fc-summary{font-size:11px;color:#bbb;margin-top:3px}
+.fc-toggle{font-size:18px;color:#fff;flex-shrink:0;line-height:1;transition:transform .15s}
+.floating-cart.collapsed .fc-toggle{transform:rotate(180deg)}
+.fc-body{flex:1;overflow-y:auto;padding:14px 16px;min-height:0}
+.fc-empty{font-size:12px;color:#ccc;text-align:center;padding:24px 0}
+.fc-week-section{margin-bottom:14px}
+.fc-week-section:last-child{margin-bottom:0}
+.fc-week-hdr{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;padding:4px 0;border-bottom:1px solid #f4f4f2;margin-bottom:4px}
+.fc-week-current{color:#D2232A}
+.fc-week-other{color:#888}
+.fc-item{display:flex;justify-content:space-between;padding:7px 0;border-bottom:1px solid #f7f7f5;gap:8px}
+.fc-item:last-child{border-bottom:none}
+.fc-item-info{flex:1;min-width:0}
+.fc-item-name{font-size:12px;font-weight:600;line-height:1.3;color:#1a1a1a}
+.fc-item-sub{font-size:10px;color:#999;margin-top:1px}
+.fc-item-right{text-align:right;flex-shrink:0}
+.fc-item-price{font-size:12px;font-weight:700;color:#1a1a1a}
+.fc-item-remove{font-size:10px;color:#D2232A;cursor:pointer;margin-top:2px;display:inline-block}
+.fc-item-remove:hover{text-decoration:underline}
+.fc-footer{border-top:1px solid #eee;padding:12px 16px;background:#fafaf9;flex-shrink:0}
+.fc-total-row{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:4px}
+.fc-total-lbl{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:#1a1a1a}
+.fc-total-val{font-size:20px;font-weight:800;color:#D2232A}
+.fc-sub{font-size:10px;color:#999;margin-bottom:10px}
+.fc-btn{width:100%;padding:11px;background:#D2232A;color:#fff;border:none;border-radius:7px;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit}
+.fc-btn:hover{background:#b01d24}
+
+/* REVIEW SCREEN */
+.review-week-block{background:#fff;border:1px solid #e8e8e6;border-radius:10px;overflow:hidden;margin-bottom:12px}
+.rwb-header{background:#1a1a1a;color:#fff;padding:10px 16px;display:flex;justify-content:space-between;align-items:center}
+.rwb-date{font-size:13px;font-weight:700}
+.rwb-edit{font-size:11px;color:#D2232A;cursor:pointer;font-weight:600;background:rgba(255,255,255,.1);padding:3px 10px;border-radius:5px}
+.rwb-edit:hover{background:rgba(255,255,255,.2)}
+.rwb-row{display:flex;justify-content:space-between;align-items:center;padding:10px 16px;border-bottom:1px solid #f4f4f2}
+.rwb-name{font-size:13px;font-weight:600}
+.rwb-sku{font-size:10px;color:#aaa;margin-top:1px}
+.rwb-price{font-size:13px;font-weight:700;text-align:right}
+.rwb-qty{font-size:10px;color:#aaa;text-align:right;margin-top:1px}
+.review-summary{background:#fff;border:1px solid #e8e8e6;border-radius:10px;padding:16px;margin-top:16px}
+.rs-week-line{display:flex;justify-content:space-between;padding:4px 0;font-size:12px;color:#888}
+.rs-week-val{font-weight:600;color:#1a1a1a}
+.rs-grand{display:flex;justify-content:space-between;padding:10px 0 0;border-top:2px solid #eee;margin-top:8px}
+.rs-grand-lbl{font-size:14px;font-weight:700}
+.rs-grand-val{font-size:16px;font-weight:800;color:#D2232A}
+.submit-btn{display:block;width:100%;padding:14px;background:#D2232A;color:#fff;border:none;border-radius:8px;font-size:14px;font-weight:700;cursor:pointer;margin-top:16px;font-family:inherit}
+.submit-btn:hover{background:#b01d24}
+
+/* CONFIRMATION */
+.conf-card{background:#fff;border:1px solid #e8e8e6;border-radius:12px;overflow:hidden;max-width:640px;margin:0 auto}
+.conf-header{background:#D2232A;color:#fff;padding:14px 20px;font-size:14px;font-weight:700}
+.conf-check{text-align:center;margin-bottom:20px}
+.conf-check-circle{width:56px;height:56px;border-radius:50%;background:#16a34a;color:#fff;font-size:28px;display:inline-flex;align-items:center;justify-content:center;margin-bottom:10px}
+.conf-title{font-size:20px;font-weight:700}
+.conf-actions{display:flex;gap:8px;justify-content:center;padding:16px}
+.conf-edit-btn{padding:9px 20px;background:#D2232A;color:#fff;border:none;border-radius:7px;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit}
+.conf-cancel-btn{padding:9px 20px;background:#fff;color:#888;border:1px solid #ddd;border-radius:7px;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit}
+
+/* CANCEL OVERLAY */
+.cancel-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:200;align-items:center;justify-content:center}
+.cancel-overlay.open{display:flex}
+.cancel-box{background:#fff;border-radius:12px;padding:24px;max-width:380px;text-align:center}
+.cancel-box h3{margin-bottom:8px}
+.cancel-box p{font-size:13px;color:#888;margin-bottom:16px}
+.cancel-keep{padding:9px 20px;background:#D2232A;color:#fff;border:none;border-radius:7px;font-size:12px;font-weight:700;cursor:pointer;margin-right:8px;font-family:inherit}
+.cancel-yes{padding:9px 20px;background:#fff;color:#888;border:1px solid #ddd;border-radius:7px;font-size:12px;cursor:pointer;font-family:inherit}
+
+/* FOOTER */
+.portal-footer{text-align:center;padding:24px;font-size:11px;color:#ccc;margin-top:32px}
+
+
+/* FILTERS */
+.filter-bar{display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap;align-items:center}
+.filter-bar select,.filter-bar input{font-family:inherit;font-size:12px;padding:7px 12px;border:1px solid #e0e0de;border-radius:7px;background:#fff;color:#1a1a1a;outline:none;transition:border-color .15s}
+.filter-bar select:focus,.filter-bar input:focus{border-color:#D2232A}
+.filter-bar input{flex:1;min-width:140px}
+.filter-label{font-size:10px;text-transform:uppercase;letter-spacing:.04em;color:#999;font-weight:700}
+.filter-clear{font-size:11px;color:#D2232A;cursor:pointer;font-weight:600;padding:7px 12px;background:none;border:none;font-family:inherit}
+.filter-clear:hover{text-decoration:underline}
+
+/* CASE BUTTONS */
+.case-btns{display:flex;gap:4px;margin-left:8px}
+.case-btn{padding:3px 8px;background:#f8f8f6;border:1px solid #e0e0de;border-radius:4px;font-size:10px;font-weight:700;color:#666;cursor:pointer;font-family:inherit;transition:all .15s}
+.case-btn:hover{border-color:#D2232A;color:#D2232A;background:#fce8e8}
+
+
+/* COMPACT STRAIN ROW */
+.strain-row{background:#fff;border:1px solid #eee;border-radius:8px;padding:12px 14px;margin-bottom:6px}
+.strain-row.so-row{background:#fdf5f5;border-color:#f0e0e0;opacity:.6}
+.sr-top{display:flex;align-items:center;justify-content:space-between;margin-bottom:6px}
+.sr-name{font-size:14px;font-weight:700}
+.sr-price{font-size:11px;color:#888;margin-top:1px}
+.sr-sizes{display:flex;flex-wrap:wrap;gap:4px;align-items:center}
+.size-group{display:flex;align-items:center;gap:3px;background:#f5f5f3;border-radius:6px;padding:4px 6px}
+.size-label{font-size:10px;font-weight:700;color:#666;min-width:28px}
+.size-add{padding:3px 10px;background:#fff;border:1.5px solid #D2232A;color:#D2232A;border-radius:5px;font-size:10px;font-weight:700;cursor:pointer;font-family:inherit}
+.size-add:hover{background:#fce8e8}
+.size-qty{display:flex;align-items:center;border:1.5px solid #D2232A;border-radius:5px;overflow:hidden}
+.size-qty button{width:24px;height:24px;background:#fff;border:none;color:#D2232A;font-size:13px;font-weight:700;cursor:pointer;padding:0}
+.size-qty button:hover{background:#fce8e8}
+.size-qty input{width:36px;text-align:center;border:none;border-left:1px solid #f0d0d0;border-right:1px solid #f0d0d0;font-size:11px;font-weight:700;font-family:inherit;padding:3px 0}
+.size-qty .sq-clear{width:20px;color:#999;font-size:11px;background:#f8f8f6;border-left:1px solid #f0d0d0}
+.case-btns-compact{display:flex;gap:2px;margin-left:4px}
+.case-btn-sm{padding:2px 5px;background:#f8f8f6;border:1px solid #e0e0de;border-radius:3px;font-size:9px;font-weight:700;color:#666;cursor:pointer;font-family:inherit}
+.case-btn-sm:hover{border-color:#D2232A;color:#D2232A;background:#fce8e8}
+
+/* EXPANDED WEEK CARD */
+.week-card-header{cursor:pointer;padding:2px 0}
+.week-card-body{display:none;border-top:1px solid #eee;margin-top:12px;padding-top:12px}
+.week-card.expanded .week-card-body{display:block}
+.week-card.expanded{border-color:#D2232A;box-shadow:0 2px 12px rgba(210,35,42,.07)}
+.wk-toggle{font-size:18px;color:#ccc;transition:transform .2s}
+.week-card.expanded .wk-toggle{transform:rotate(90deg);color:#D2232A}
+
+/* Inline product rows inside week cards */
+.wk-cat-hdr{display:flex;align-items:center;gap:10px;margin:14px 0 8px;border-left:3px solid #D2232A;padding-left:10px}
+.wk-cat-hdr:first-child{margin-top:0}
+.wk-cat-name{font-size:14px;font-weight:700}
+.wk-sku-blk{background:#f8f8f6;border-radius:7px;padding:10px 12px;margin-bottom:6px}
+.wk-sku-lbl{font-size:10px;text-transform:uppercase;letter-spacing:.04em;color:#999;font-weight:700;margin-bottom:6px}
+.wk-prod-row{display:flex;align-items:center;justify-content:space-between;padding:7px 0;border-bottom:1px solid #eee}
+.wk-prod-row:last-child{border-bottom:none}
+.wk-prod-row.so{opacity:.4}
+
+/* MOBILE */
+@media(max-width:720px){
+  .topbar{padding:0 16px}
+  .page{padding:20px 16px 60px}
+  body.on-order-screen .page{padding:20px 16px 60px}
+  .order-layout{flex-direction:column;gap:16px}
+  .side-cart-wrap{width:100%;position:static;max-height:none}
+  .side-cart-box{box-shadow:none}
+  .account-name{font-size:20px}
+}
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div class="rb-logo" style="cursor:pointer" onclick="goTo(1)">
+    <img src="data:image/svg+xml;base64,PD94bWwgdmVyc2lvbj0iMS4wIiBlbmNvZGluZz0iVVRGLTgiIHN0YW5kYWxvbmU9Im5vIj8+CjwhRE9DVFlQRSBzdmcgUFVCTElDICItLy9XM0MvL0RURCBTVkcgMS4xLy9FTiIgImh0dHA6Ly93d3cudzMub3JnL0dyYXBoaWNzL1NWRy8xLjEvRFREL3N2ZzExLmR0ZCI+Cjxzdmcgd2lkdGg9IjEwMCUiIGhlaWdodD0iMTAwJSIgdmlld0JveD0iMCAwIDk1MyA5MzQiIHZlcnNpb249IjEuMSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIiB4bWxuczp4bGluaz0iaHR0cDovL3d3dy53My5vcmcvMTk5OS94bGluayIgeG1sOnNwYWNlPSJwcmVzZXJ2ZSIgeG1sbnM6c2VyaWY9Imh0dHA6Ly93d3cuc2VyaWYuY29tLyIgc3R5bGU9ImZpbGwtcnVsZTpldmVub2RkO2NsaXAtcnVsZTpldmVub2RkO3N0cm9rZS1saW5lam9pbjpyb3VuZDtzdHJva2UtbWl0ZXJsaW1pdDoyOyI+CiAgICA8ZyB0cmFuc2Zvcm09Im1hdHJpeCgxLDAsMCwxLC03NjE3NiwwKSI+CiAgICAgICAgPGcgaWQ9IlBhZ2UtNCIgc2VyaWY6aWQ9IlBhZ2UgNCIgdHJhbnNmb3JtPSJtYXRyaXgoNC4xNjY2NywwLDAsNC4xNjY2Nyw3NjE3Ni42LDApIj4KICAgICAgICAgICAgPHJlY3QgeD0iMCIgeT0iMCIgd2lkdGg9IjIyOC40NiIgaGVpZ2h0PSIyMjQuMDc2IiBzdHlsZT0iZmlsbDpub25lOyIvPgogICAgICAgICAgICA8ZyBpZD0iQmFja2dyb3VuZCI+CiAgICAgICAgICAgIDwvZz4KICAgICAgICAgICAgPGcgaWQ9IkxvZ28tQXJ0IiBzZXJpZjppZD0iTG9nbyBBcnQiPgogICAgICAgICAgICAgICAgPGcgdHJhbnNmb3JtPSJtYXRyaXgoMSwwLDAsMSwxMDUuOTUsMTIxLjk3NikiPgogICAgICAgICAgICAgICAgICAgIDxwYXRoIGQ9Ik0wLC0xOS44MTdDMC4wMDEsLTE5LjgxNyAwLjAwMiwtMTkuODE3IDAuMDAyLC0xOS44MThDMC4wMDMsLTE5LjgxOSAwLjAwNCwtMTkuODIgMC4wMDUsLTE5LjgyQzAuODgxLC0yMC41OTMgMS43OSwtMjEuMzY4IDIuNzIzLC0yMi4xMTZDMy42NTYsLTIyLjg2NCA0LjYxMywtMjMuNTg3IDUuNTg3LC0yNC4yNTRDNy44NDgsLTI1LjcxNSA5Ljk1MywtMjYuODczIDExLjkzMiwtMjcuNzc1QzEzLjkxMSwtMjguNjc2IDE1Ljc2MywtMjkuMzIxIDE3LjUxNiwtMjkuNzU2QzIyLjIsLTMwLjkxNSAyNi4xNzgsLTMwLjU3NyAyOS45NzYsLTI5LjYzN0MzMy43NzQsLTI4LjY5NiAzNy4zOTQsLTI3LjE1MyA0MS4zNjMsLTI1LjlDNDQuNTM0LC0yNC44OTggNDcuOTI4LC0yNC4wOCA1MS44MTQsLTIzLjkwM0M1NS42OTksLTIzLjcyNiA2MC4wNzYsLTI0LjE5MSA2NS4yMTQsLTI1Ljc1QzY1LjIxNywtMjUuNzUxIDY1LjIyLC0yNS43NTEgNjUuMjIyLC0yNS43NTJDNjcuMzk4LC0yNi4yMSA2OS41OTUsLTI2LjY2MiA3MS43OSwtMjdDNzMuOTM1LC0yNy4zMyA3Ni4wNzcsLTI3LjU1IDc4LjE5NCwtMjcuNTYxQzc4LjI2NiwtMjcuNTYxIDc4LjMxMywtMjcuNjMzIDc4LjI4NSwtMjcuNjk5QzcwLjA2OSwtNDYuNjE0IDU4LjQwOCwtNjQuMzE2IDQ0LjM4NSwtODAuMjExQzMwLjM5NywtOTYuMDY2IDE0LjA1OSwtMTEwLjEyNCAtMy41NTksLTEyMS43OTlDLTMuNjQsLTEyMS44NTMgLTMuNzQzLC0xMjEuNzcgLTMuNzA3LC0xMjEuNjc5Qy0xLjU0NSwtMTE2LjI0NCAwLjQ2OSwtMTEwLjczNSAyLjMzMSwtMTA1LjE1N0M0LjIyNywtOTkuNDc4IDUuOTY0LC05My43MjYgNy41MzksLTg3LjkwN0M2LjYyOCwtODkuMjA0IDUuNzA4LC05MC40OTQgNC43NzgsLTkxLjc3N0MzLjg0OSwtOTMuMDYgMi45MSwtOTQuMzM2IDEuOTYyLC05NS42MDRDMC41ODksLTk3LjQ0MiAtMS40MiwtMTAwLjExNiAtMy4yNjksLTEwMi41MDVDLTQuOTkzLC0xMDQuNzMzIC02LjU3OCwtMTA2LjcxMiAtNy4zNzYsLTEwNy41MjhDLTcuNDM3LC0xMDcuNTkgLTcuNTM5LC0xMDcuNTQzIC03LjU0MSwtMTA3LjQ1NkMtOC4wNDgsLTg0LjQwMyAtMjIuMzEzLC02MS4zMDkgLTQxLjU5NSwtNDIuMTkyQy02MC44MjMsLTIzLjEyOSAtODUuMDQsLTguMDIxIC0xMDUuNTc1LC0wLjg1NEMtMTA1LjY3MywtMC44MTkgLTEwNS42NTYsLTAuNjgzIC0xMDUuNTUzLC0wLjY2OUMtODIuNzI0LDIuNTE3IC02MC41NTgsMTAuMzYgLTQwLjc5NiwyMi4wNDJDLTIwLjkxOSwzMy43OTMgLTMuNDc2LDQ5LjQyNyA5Ljc2NCw2OC4xMTVDMTMuNDU4LDczLjMyOCAxNi44MjMsNzguNzc5IDE5LjgyNCw4NC40NUMyMi44LDkwLjA3MyAyNS40MTYsOTUuOTEyIDI3LjYzNSwxMDEuOTQ4QzI3LjY2MSwxMDIuMDE4IDI3Ljc1MSwxMDIuMDM2IDI3LjgwMiwxMDEuOTgyQzMxLjM1MSw5OC4xODggMzQuNjk5LDk0LjIzOCAzNy44MzMsOTAuMTQyQzQwLjk5NCw4Ni4wMTIgNDMuOTM4LDgxLjczMiA0Ni42NTQsNzcuMzExQzQ2LjY2NSw3Ny4yOTMgNDYuNjcsNzcuMjcyIDQ2LjY2OSw3Ny4yNUM0NS44MzIsNjMuNDY5IDQyLjgzNSw0OS45MzggMzguMDExLDM3LjA4MUMzMy4xODQsMjQuMjE0IDI2LjUyNSwxMi4wMjIgMTguMzcsMC45MjlDMTUuNjI5LC0yLjc5OCAxMi43MTksLTYuNDAxIDkuNjU0LC05Ljg2NEM2LjU4OCwtMTMuMzI3IDMuMzY2LC0xNi42NSAwLC0xOS44MTciIHN0eWxlPSJmaWxsOnJnYigyMTIsMCwyOCk7ZmlsbC1ydWxlOm5vbnplcm87Ii8+CiAgICAgICAgICAgICAgICA8L2c+CiAgICAgICAgICAgICAgICA8ZyB0cmFuc2Zvcm09Im1hdHJpeCgxLDAsMCwxLDE4Ny43ODksMTQ1LjQ1OSkiPgogICAgICAgICAgICAgICAgICAgIDxwYXRoIGQ9Ik0wLC00Mi42NDZDLTAuMDI3LC00Mi42NTggLTAuMDYsLTQyLjY1OCAtMC4wODYsLTQyLjY0NUMtMi42NiwtNDEuNDE1IC01LjEzLC00MC4wMzEgLTcuNDgzLC0zOC41MDdDLTkuODQ5LC0zNi45NzUgLTEyLjA5NiwtMzUuMzAxIC0xNC4yMDksLTMzLjVDLTE0LjIzLC0zMy40ODEgLTE0LjI1LC0zMy40NjMgLTE0LjI3LC0zMy40NDZDLTE0LjI5MSwtMzMuNDI4IC0xNC4zMTEsLTMzLjQxMSAtMTQuMzMxLC0zMy4zOTRDLTE3LjM0NSwtMzAuODEzIC0yMC4wODYsLTI3Ljk3IC0yMi41MTEsLTI0LjkwNkMtMjQuOTM2LC0yMS44NDMgLTI3LjA0MywtMTguNTU4IC0yOC43OTEsLTE1LjA5Qy0yOS45NTUsLTEyLjc4MyAtMzAuOTU5LC0xMC4zOTUgLTMxLjc5MiwtNy45MzhDLTMyLjYxMSwtNS41MTcgLTMzLjI2NCwtMy4wMjkgLTMzLjczNiwtMC40ODdDLTMzLjc0OCwtMC40MjcgLTMzLjcwMywtMC4zNyAtMzMuNjQzLC0wLjM2NkMtMzIuMjMyLC0wLjI3NiAtMzAuODE4LC0wLjIwMyAtMjkuMzk4LC0wLjE0NUMtMjcuOTQxLC0wLjA4NSAtMjYuNDc5LC0wLjA0MyAtMjUuMDEzLC0wLjAxOUMtMjQuNTg2LC0wLjAxIC0yNC4xNTksLTAuMDA0IC0yMy43MzEsMEMtMjMuMzAzLDAuMDA1IC0yMi44NzUsMC4wMDggLTIyLjQ0NiwwLjAwOUwtMjIuMDg2LDAuMDA5Qy0yMi4wMjUsMC4wMTEgLTIxLjk2NSwwLjAxMSAtMjEuOTA1LDAuMDEyTC0yMS43MjMsMC4wMTJDLTIwLjY3NSwwLjAxMiAtMTkuNjMsMC4wMDMgLTE4LjU4OCwtMC4wMTVDLTE3LjU0NiwtMC4wMzIgLTE2LjUwNywtMC4wNTkgLTE1LjQ3LC0wLjA5M0MtMTUuNDUyLC0wLjA5MyAtMTUuNDM1LC0wLjA5NCAtMTUuNDE4LC0wLjA5NUMtMTUuNDAxLC0wLjA5NSAtMTUuMzg0LC0wLjA5NiAtMTUuMzY4LC0wLjA5NkMtNS41MDIsLTAuNDI3IDQuMTQ4LC0xLjUyOCAxMy41MTEsLTMuMzM1QzIyLjgyOCwtNS4xMzMgMzEuODYxLC03LjYyOSA0MC41NDEsLTEwLjc2MUM0MC42MDUsLTEwLjc4NCA0MC42MjksLTEwLjg2NSA0MC41ODcsLTEwLjkxOUMzNS40NzgsLTE3LjY2NyAyOS40MzYsLTIzLjc4NCAyMi42MywtMjkuMTE3QzE1LjgsLTM0LjQ2OSA4LjIsLTM5LjAzMSAwLC00Mi42NDYiIHN0eWxlPSJmaWxsOnJnYigyMTIsMCwyOCk7ZmlsbC1ydWxlOm5vbnplcm87Ii8+CiAgICAgICAgICAgICAgICA8L2c+CiAgICAgICAgICAgIDwvZz4KICAgICAgICA8L2c+CiAgICA8L2c+Cjwvc3ZnPgo=" alt="Redbird" style="height:28px;width:auto">
+    <span class="rb-brand">Redbird Cannabis</span>
+  </div>
+  <div class="topbar-right">
+    <span class="topbar-date" id="topbar-date"></span>
+    <div class="cart-badge-btn" id="cart-badge" onclick="goToReview()">
+      <span class="cart-icon">🛒</span>
+      <span id="cart-badge-label"></span>
+    </div>
+  </div>
+</div>
+
+<div class="page">
+
+  <!-- SCREEN 1: WEEK OVERVIEW -->
+  <div class="screen active" id="screen-1">
+    <div class="account-header">
+      <div class="account-name" id="acct-name">Loading...</div>
+      <div class="account-sub" id="acct-sub">Select delivery weeks to build your reservation</div>
+    </div>
+    <div class="filter-bar" id="portal-filters" style="display:none">
+      <input type="text" id="filterStrain" placeholder="Search strain..." oninput="applyFilters()">
+      <select id="filterProductType" onchange="applyFilters()">
+        <option value="">All Product Types</option>
+        <option value="Flower">Flower</option>
+        <option value="Joints">Joints</option>
+        <option value="Vapes">Vapes</option>
+      </select>
+      <select id="filterProductSize" onchange="applyFilters()">
+        <option value="">All Sizes</option>
+        <option value="3.5g">3.5g Flower</option>
+        <option value="7g">7g Flower</option>
+        <option value="14g">14g Micros</option>
+        <option value="28g">28g Flower</option>
+        <option value="1g">1g Singles</option>
+        <option value="2pk">2pk Joints</option>
+        <option value="10pk">10pk Joints</option>
+        <option value="vape">0.5g Vape Cart</option>
+      </select>
+      <button class="filter-clear" onclick="clearFilters()">Clear</button>
+    </div>
+  <!-- EMAIL LOOKUP SCREEN (shown when no acct param) -->
+  <div id="email-lookup-screen" style="display:none;max-width:420px;margin:60px auto;text-align:center;padding:0 20px">
+    <div style="margin-bottom:24px"><img src="https://joshruhlman-creator.github.io/redbird-crm/redbird-icon.svg" alt="" style="width:48px;height:48px" onerror="this.style.display='none'"></div>
+    <div style="font-size:22px;font-weight:800;color:#333;margin-bottom:6px">Welcome to Redbird Cannabis</div>
+    <div style="font-size:13px;color:#888;margin-bottom:24px">Enter your email to access your pre-order portal</div>
+    <div style="position:relative">
+      <input type="email" id="lookup-email" placeholder="your@email.com" style="width:100%;box-sizing:border-box;padding:14px 16px;font-size:15px;border:2px solid #ddd;border-radius:10px;font-family:inherit;outline:none" onkeydown="if(event.key==='Enter')lookupEmail()" onfocus="this.style.borderColor='#D2232A'" onblur="this.style.borderColor='#ddd'">
+    </div>
+    <button onclick="lookupEmail()" style="margin-top:14px;width:100%;padding:14px;background:#D2232A;color:#fff;border:none;border-radius:10px;font-size:14px;font-weight:700;cursor:pointer;font-family:inherit">Continue</button>
+    <div id="lookup-error" style="margin-top:12px;font-size:12px;color:#D2232A;display:none"></div>
+    <div id="lookup-loading" style="margin-top:12px;font-size:12px;color:#888;display:none">Looking up your account...</div>
+  </div>
+
+    <div id="week-list">
+      <div class="loading"><div class="spinner"></div>Loading inventory data...</div>
+    </div>
+    <div class="portal-footer">Availability is first-come, first-served · Projections subject to change</div>
+  </div>
+
+  <!-- SCREEN 2: ORDER -->
+  <div class="screen" id="screen-2">
+    <div class="breadcrumb"><a href="#" onclick="goTo(1);return false">← All weeks</a> / <span id="bc-acct"></span> / <strong id="bc-week"></strong></div>
+    <div class="order-layout">
+      <div class="order-products" id="product-list"></div>
+    </div>
+  </div>
+
+  <!-- SCREEN 3: REVIEW -->
+  <div class="screen" id="screen-3">
+    <div style="text-align:center;margin-bottom:24px">
+      <div style="font-size:20px;font-weight:700">Review Your Reservation</div>
+      <div style="font-size:13px;color:#aaa;margin-top:4px">Confirm quantities before submitting</div>
+    </div>
+    <div id="review-weeks"></div>
+    <div class="review-summary">
+      <div id="review-week-totals"></div>
+      <div class="rs-grand">
+        <span class="rs-grand-lbl">Grand total</span>
+        <span class="rs-grand-val" id="review-grand-total"></span>
+      </div>
+    </div>
+    <button class="submit-btn" onclick="openSubmitConfirm()">Submit Reservation</button>
+    <div style="text-align:center;margin-top:8px"><a href="#" onclick="goTo(1);return false" style="font-size:12px;color:#D2232A">← Continue shopping</a></div>
+  </div>
+
+  <!-- SCREEN 4: CONFIRMATION -->
+  <div class="screen" id="screen-4">
+    <div class="conf-check">
+      <div class="conf-check-circle">✓</div>
+      <div class="conf-title">Reservation Confirmed</div>
+    </div>
+    <div class="conf-card">
+      <div class="conf-header" id="conf-subject"></div>
+      <div id="conf-order-table"></div>
+      <div style="padding:12px 16px;font-size:11px;color:#aaa;border-top:1px solid #eee">Availability is first-come, first-served. We'll be in touch to confirm delivery details.</div>
+      <div class="conf-actions">
+        <button class="conf-edit-btn" onclick="goToEdit()">Edit reservation</button>
+        <button class="conf-cancel-btn" onclick="openCancelConfirm()">Cancel</button>
+      </div>
+      <div style="text-align:center;padding:12px;border-top:1px solid #eee">
+        <a href="#" onclick="startOver();return false" style="font-size:12px;color:#D2232A;text-decoration:none;font-weight:600">← Place a new reservation</a>
+      </div>
+    </div>
+  </div>
+
+  <!-- SCREEN 5: EDIT -->
+  <div class="screen" id="screen-5">
+    <div style="margin-bottom:12px"><a href="#" onclick="renderConfirmation();goTo(4);return false" style="font-size:12px;color:#D2232A;text-decoration:none;font-weight:600">← Back to confirmation</a></div>
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+      <div>
+        <div style="font-size:11px;color:#aaa" id="edit-order-id"></div>
+        <div style="font-size:13px;font-weight:600" id="edit-delivery-info"></div>
+      </div>
+      <span class="badge b-confirmed">Confirmed</span>
+    </div>
+    <div id="edit-items-table" style="background:#fff;border:1px solid #e8e8e6;border-radius:10px;overflow:hidden"></div>
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-top:16px;padding-top:12px;border-top:2px solid #eee">
+      <span style="font-size:14px;font-weight:700">Revised total</span>
+      <span style="font-size:16px;font-weight:800;color:#D2232A" id="edit-total"></span>
+    </div>
+    <div style="display:flex;gap:8px;margin-top:16px">
+      <button class="done-btn" onclick="saveEdit()">Save changes</button>
+      <button class="browse-more-btn" style="color:#888;border-color:#ddd" onclick="openCancelConfirm()">Cancel reservation</button>
+    </div>
+  </div>
+
+  <!-- SCREEN 6: CANCELLED -->
+  <div class="screen" id="screen-6">
+    <div style="text-align:center;padding:60px 0">
+      <div style="font-size:48px;margin-bottom:12px">✕</div>
+      <div style="font-size:20px;font-weight:700;margin-bottom:8px">Reservation Cancelled</div>
+      <div style="font-size:13px;color:#aaa;margin-bottom:24px">Your reservation has been cancelled.</div>
+      <button class="done-btn" style="width:auto;padding:12px 32px" onclick="startOver()">Place a new reservation</button>
+    </div>
+  </div>
+</div>
+
+<!-- SUBMIT CONFIRM OVERLAY -->
+<div class="cancel-overlay" id="submit-overlay">
+  <div class="cancel-box">
+    <h3>Submit this reservation?</h3>
+    <p id="submit-confirm-summary"></p>
+    <button class="cancel-keep" onclick="closeSubmitConfirm();submitOrder()">Yes, submit</button>
+    <button class="cancel-yes" onclick="closeSubmitConfirm()">Go back</button>
+  </div>
+</div>
+
+<!-- SUBMIT CONFIRMATION OVERLAY -->
+<div class="cancel-overlay" id="submit-overlay">
+  <div class="cancel-box">
+    <h3>Submit this reservation?</h3>
+    <p>You're about to reserve <strong id="submit-confirm-count"></strong> items totaling <strong id="submit-confirm-total" style="color:#D2232A"></strong>. This will be sent to the Redbird team.</p>
+    <button class="cancel-keep" onclick="closeSubmitConfirm();submitOrder()">Yes, submit</button>
+    <button class="cancel-yes" onclick="closeSubmitConfirm()">Go back</button>
+  </div>
+</div>
+
+<!-- CANCEL OVERLAY -->
+<div class="cancel-overlay" id="cancel-overlay">
+  <div class="cancel-box">
+    <h3>Cancel this reservation?</h3>
+    <p>This cannot be undone. Your reserved quantities will be released.</p>
+    <button class="cancel-keep" onclick="closeCancelConfirm()">Keep reservation</button>
+    <button class="cancel-yes" onclick="confirmCancel()">Yes, cancel</button>
+  </div>
+</div>
+
+<script>
+// ── CONFIG ──
+var SHEETS_API_KEY = 'AIzaSyCiX_mltG3QDz8q6Sx77yQnltMSup7Ik8o';
+var CRM_SHEET_ID = '1Nrz05Rr8B1-5-2HXIXByy_pL6TH9U6wz-HUgu9LSkjw';
+var APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbzg3yRy-UXnZCGMTtG0kunUVoW3XipghjsPfqNLiqYYlfKetk8TTP0GUXLPeWc3uQnOKw/exec';
+
+// Pricing per unit
+var PRICES = {
+  'p35': 10,      // 3.5g flower
+  'p7': 16.66,    // 7g flower
+  'p28': 60,      // 28g flower
+  'pm': 33.33,    // 14g micros
+  'j1': 2,        // 1g joint
+  'j2': 2.50,     // 2pk joint
+  'j10': 10,      // 10pk joint
+  'vape': 15      // live resin vape
+};
+
+// ── URL PARAMS ──
+var params = new URLSearchParams(window.location.search);
+var ACCT_PARAM = params.get('acct') || params.get('account') || '';
+var CONTACT_PARAM = params.get('contact') || '';
+var EMAIL_PARAM = params.get('email') || '';
+var CONTACT_DATA = { name: CONTACT_PARAM, email: EMAIL_PARAM, account: ACCT_PARAM };
+
+// ── STATE ──
+var WEEKS = [];
+var cart = {};
+var currentWeekId = null;
+var submittedOrder = null;
+var editCart = {};
+
+function fmt(n) { return '$' + n.toLocaleString('en-US', {minimumFractionDigits: 0, maximumFractionDigits: 2}); }
+function genId() { return 'RB-' + new Date().getFullYear() + '-' + String(Math.floor(1000 + Math.random() * 9000)); }
+function getWeek(id) { return WEEKS.find(function(w) { return w.id === id; }); }
+
+function getProduct(weekId, productId) {
+  var week = getWeek(weekId);
+  if (!week) return null;
+  for (var ci = 0; ci < week.categories.length; ci++) {
+    var cat = week.categories[ci];
+    for (var si = 0; si < cat.skus.length; si++) {
+      var sku = cat.skus[si];
+      for (var pi = 0; pi < sku.products.length; pi++) {
+        var p = sku.products[pi];
+        if (p.id === productId) {
+          return Object.assign({}, p, { skuLabel: sku.label, catName: cat.name, weekId: weekId });
+        }
+      }
+    }
+  }
+  return null;
+}
+
+function weekCartTotal(weekId) {
+  var wc = cart[weekId] || {};
+  var sum = 0;
+  Object.keys(wc).forEach(function(id) {
+    var p = getProduct(weekId, id);
+    if (p) sum += p.price * wc[id];
+  });
+  return sum;
+}
+
+function grandTotal() {
+  var sum = 0;
+  Object.keys(cart).forEach(function(wid) { sum += weekCartTotal(wid); });
+  return sum;
+}
+
+function totalItemCount() {
+  var count = 0;
+  Object.values(cart).forEach(function(wc) {
+    Object.values(wc).forEach(function(q) { count += q; });
+  });
+  return count;
+}
+
+function weekItemCount(weekId) {
+  var wc = cart[weekId] || {};
+  var count = 0;
+  Object.values(wc).forEach(function(q) { count += q; });
+  return count;
+}
+
+// ── LOAD LIVE DATA ──
+async function loadPortalData() {
+  try {
+    // Load inventory projections (raw — same as CRM)
+    var invUrl = 'https://sheets.googleapis.com/v4/spreadsheets/' + CRM_SHEET_ID
+      + '/values/' + encodeURIComponent('Inventory Projections Mirror')
+      + '?key=' + SHEETS_API_KEY + '&valueRenderOption=FORMATTED_VALUE';
+    var invRes = await fetch(invUrl);
+    var invJson = await invRes.json();
+    var invRaw = invJson.values || [];
+
+    // Load orders for presold data
+    var ordUrl = 'https://sheets.googleapis.com/v4/spreadsheets/' + CRM_SHEET_ID
+      + '/values/' + encodeURIComponent('OrdersLog')
+      + '?key=' + SHEETS_API_KEY + '&valueRenderOption=FORMATTED_VALUE';
+    var ordRes = await fetch(ordUrl);
+    var ordJson = await ordRes.json();
+    var ordHeaders = (ordJson.values || [])[0] || [];
+    var ordRows = (ordJson.values || []).slice(1);
+
+    // Load genetics for strain types (Sativa/Indica/Hybrid)
+    var GENETICS_SHEET_ID = '1GCvS1EK8u6YmyKaZEIWA7omUSlZsapktEjjIcWDEL1g';
+    try {
+      var genUrl = 'https://sheets.googleapis.com/v4/spreadsheets/' + GENETICS_SHEET_ID
+        + '/values/Genetics!A:E?key=' + SHEETS_API_KEY + '&valueRenderOption=FORMATTED_VALUE';
+      var genRes = await fetch(genUrl);
+      var genJson = await genRes.json();
+      var genRows = (genJson.values || []).slice(1); // skip header
+      window.STRAIN_TYPES = {};
+      genRows.forEach(function(r) {
+        var strain = (r[0] || '').trim();
+        var type = (r[4] || '').trim();
+        if (strain && type) window.STRAIN_TYPES[strain.toLowerCase()] = type;
+      });
+      console.log('[Portal] Genetics loaded:', Object.keys(window.STRAIN_TYPES).length, 'strains');
+    } catch(e) {
+      console.warn('[Portal] Could not load genetics:', e.message);
+      window.STRAIN_TYPES = {};
+    }
+
+    // Parse inventory
+    var batches = parseInventoryRaw(invRaw);
+
+    // Parse presold from orders
+    var presold = parsePresold(ordHeaders, ordRows);
+
+    // Build delivery weeks
+    WEEKS = buildWeeks(batches, presold);
+
+    // Set account name
+    var acctEl = document.getElementById('acct-name');
+    if (ACCT_PARAM) {
+      acctEl.textContent = decodeURIComponent(ACCT_PARAM);
+      document.getElementById('bc-acct').textContent = decodeURIComponent(ACCT_PARAM);
+    } else {
+      acctEl.textContent = 'Redbird Cannabis';
+    }
+
+    renderWeeks();
+    updateCartBadge();
+  } catch (err) {
+    console.error('Portal data load error:', err);
+    document.getElementById('week-list').innerHTML = '<div class="loading" style="color:#D2232A">Failed to load inventory data. Please try again.</div>';
+  }
+}
+
+function parseInventoryRaw(rawRows) {
+  if (!rawRows || rawRows.length < 2) return [];
+  var dataRows = rawRows.slice(1); // skip header
+  var today = new Date().toISOString().slice(0, 10);
+
+  function normDate(val) {
+    if (!val) return '';
+    try {
+      var d = new Date(val);
+      if (!isNaN(d) && d.getFullYear() >= 2000) return d.toISOString().slice(0, 10);
+    } catch (e) {}
+    return '';
+  }
+  function num(val) { return Math.round(parseFloat(String(val || '0').replace(/[,$]/g, '')) || 0); }
+
+  return dataRows.filter(function(r) { return r[5] && r[0] && num(r[2]) >= 4; }).map(function(r) {
+    var isFreshFrozen = String(r[27] || '').toUpperCase() === 'TRUE';
+    return {
+      week: normDate(r[0]),
+      strain: (r[5] || '').trim(),
+      room: num(r[1]),
+      totes: num(r[2]),
+      flowerDate: normDate(r[6]),
+      jointDate: normDate(r[7]),
+      p35: num(r[8]),
+      pm: num(r[15]),
+      j1: num(r[20]),
+      j2: num(r[21]),
+      j10: num(r[22]),
+      liveResin: isFreshFrozen,
+    };
+  }).filter(function(r) {
+    // Only include batches with future delivery dates
+    // Check each delivery date individually — flower must be future for flower, joints for joints
+    var hasFutureFlower = r.flowerDate && r.flowerDate >= today;
+    var hasFutureJoints = r.jointDate && r.jointDate >= today;
+    // If neither delivery date is set, fall back to week date
+    if (!r.flowerDate && !r.jointDate) return r.week >= today;
+    return hasFutureFlower || hasFutureJoints;
+  });
+}
+
+function parsePresold(headers, rows) {
+  // Parse individual orders so we can allocate across harvests per-account
+  // Returns: { orders: [...], totals: { strain|field -> units } }
+  var orders = [];
+  var totals = {};
+  var FULFILLED = ['closed won', 'sublotted', 'invoiced', 'manifested', 'delivered'];
+
+  rows.forEach(function(row) {
+    var obj = {};
+    headers.forEach(function(h, i) { obj[h.trim()] = (row[i] || '').toString().trim(); });
+    var status = (obj['Status'] || '').toLowerCase();
+    var isFulfilled = FULFILLED.some(function(s) { return status.indexOf(s) >= 0; });
+    if (isFulfilled) return;
+
+    var strain = (obj['Strain'] || '').trim().toLowerCase();
+    var units = parseInt(obj['Units']) || 0;
+    if (!strain || !units) return;
+    var account = (obj['Client'] || '').trim().toLowerCase();
+    var orderNum = (obj['Order #'] || '').trim();
+
+    var prod = (obj['Product Line'] || obj['Product'] || '').toLowerCase();
+    var field = null;
+    if (/28g|28\s*g|oz|ounce/i.test(prod)) field = 'p28';
+    else if (/7g|7\s*g|quarter/i.test(prod)) field = 'p7';
+    else if (/3\.5|flower\s*\(3\.5|eighth/i.test(prod)) field = 'p35';
+    else if (/micro|14g/i.test(prod)) field = 'pm';
+    else if (/10pk|10\s*pk/i.test(prod)) field = 'j10';
+    else if (/2pk|2\s*pk/i.test(prod)) field = 'j2';
+    else if (/infused/i.test(prod)) field = 'inf';
+    else if (/1g|joint|preroll/i.test(prod)) field = 'j1';
+
+    if (field) {
+      orders.push({ account: account, orderNum: orderNum, strain: strain, field: field, units: units });
+      var key = strain + '|' + field;
+      totals[key] = (totals[key] || 0) + units;
+    }
+  });
+  return { orders: orders, totals: totals };
+}
+
+function buildWeeks(batches, presold) {
+  var today = new Date().toISOString().slice(0, 10);
+  var presoldOrders = presold.orders || [];
+  var presoldTotals = presold.totals || {};
+
+  // Step 1: Build gross inventory per harvest (delivery date + strain)
+  var harvests = {}; // key: date|strain_lower -> { flowerWeightGrams, pm, j1, j2, j10, vape }
+
+  batches.forEach(function(b) {
+    var strainLower = b.strain.toLowerCase();
+
+    // Skip strains with 4 or fewer totes - too small to share on the portal
+    if (b.totes <= 4) return;
+
+    if (b.flowerDate && b.flowerDate >= today && !b.liveResin) {
+      var hk = b.flowerDate + '|' + strainLower;
+      if (!harvests[hk]) harvests[hk] = { date: b.flowerDate, strain: b.strain, strainLower: strainLower, type: 'flower', weightGrams: 0, pm: 0 };
+      harvests[hk].weightGrams += b.p35 * 3.5;
+      harvests[hk].pm += (b.pm || 0);
+    }
+
+    var jd = b.jointDate || '';
+    if (!jd && b.flowerDate) {
+      var fdt = new Date(b.flowerDate + 'T12:00');
+      fdt.setDate(fdt.getDate() + 7);
+      jd = fdt.toISOString().slice(0, 10);
+    }
+    if (jd && jd >= today && !b.liveResin && (b.j1 > 0 || b.j2 > 0 || b.j10 > 0)) {
+      var jk = jd + '|' + strainLower + '|joints';
+      if (!harvests[jk]) harvests[jk] = { date: jd, strain: b.strain, strainLower: strainLower, type: 'joints', j1: 0, j2: 0, j10: 0 };
+      harvests[jk].j1 += b.j1;
+      harvests[jk].j2 += b.j2;
+      harvests[jk].j10 += b.j10;
+    }
+
+    if (b.liveResin && b.flowerDate && b.flowerDate >= today) {
+      var vk = b.flowerDate + '|' + strainLower + '|vape';
+      if (!harvests[vk]) harvests[vk] = { date: b.flowerDate, strain: b.strain, strainLower: strainLower, type: 'vape', units: 0 };
+      harvests[vk].units += b.totes;
+    }
+  });
+
+  // Step 2: Allocate presold orders across harvests
+  // Rule: If same account has multiple orders for the same strain+field,
+  // each order goes to a different harvest (chronological order)
+  // Group orders by account + strain + field
+  var orderGroups = {};
+  presoldOrders.forEach(function(o) {
+    var gk = o.account + '|' + o.strain + '|' + o.field;
+    if (!orderGroups[gk]) orderGroups[gk] = [];
+    orderGroups[gk].push(o);
+  });
+
+  // For each strain+field, get available harvests sorted chronologically
+  // Then allocate each account's orders across different harvests
+  var harvestDeductions = {}; // harvestKey -> { weightDeducted, pmDeducted, j1Deducted, ... }
+
+  Object.keys(orderGroups).forEach(function(gk) {
+    var groupOrders = orderGroups[gk];
+    if (groupOrders.length === 0) return;
+
+    var strain = groupOrders[0].strain;
+    var field = groupOrders[0].field;
+    var isFlower = ['p35', 'p7', 'p28'].indexOf(field) >= 0;
+    var isMicro = field === 'pm';
+    var isJoint = ['j1', 'j2', 'j10'].indexOf(field) >= 0;
+
+    // Find available harvests for this strain, sorted by date
+    var relevantHarvests = Object.keys(harvests).filter(function(hk) {
+      var h = harvests[hk];
+      if (h.strainLower !== strain) return false;
+      if (isFlower && h.type === 'flower') return true;
+      if (isMicro && h.type === 'flower') return true;
+      if (isJoint && h.type === 'joints') return true;
+      return false;
+    }).sort(function(a, b) { return harvests[a].date.localeCompare(harvests[b].date); });
+
+    if (relevantHarvests.length === 0) return;
+
+    // Assign each order to a different harvest (round-robin)
+    groupOrders.forEach(function(order, idx) {
+      var harvestIdx = idx % relevantHarvests.length;
+      var hk = relevantHarvests[harvestIdx];
+
+      if (!harvestDeductions[hk]) harvestDeductions[hk] = { weightGrams: 0, pm: 0, j1: 0, j2: 0, j10: 0 };
+
+      if (isFlower) {
+        // Convert to weight for deduction
+        var weightPerUnit = field === 'p35' ? 3.5 : field === 'p7' ? 7 : 28;
+        harvestDeductions[hk].weightGrams += order.units * weightPerUnit;
+      } else if (isMicro) {
+        harvestDeductions[hk].pm += order.units;
+      } else if (isJoint) {
+        harvestDeductions[hk][field] += order.units;
+      }
+    });
+  });
+
+  // Step 3: Build weekMap with net availability per harvest
+  var weekMap = {};
+
+  Object.keys(harvests).forEach(function(hk) {
+    var h = harvests[hk];
+    var ded = harvestDeductions[hk] || { weightGrams: 0, pm: 0, j1: 0, j2: 0, j10: 0 };
+    var fd = h.date;
+
+    if (!weekMap[fd]) weekMap[fd] = { date: fd, flower: {}, joints: {}, vape: {} };
+
+    if (h.type === 'flower') {
+      if (!weekMap[fd].flower[h.strain]) weekMap[fd].flower[h.strain] = { p35_gross:0, p35_net:0, p7_gross:0, p7_net:0, p28_gross:0, p28_net:0, pm_gross:0, pm_net:0 };
+      var grossWeight = h.weightGrams;
+      var netWeight = Math.max(0, grossWeight - ded.weightGrams);
+      var grossUnits35 = Math.floor(grossWeight / 3.5);
+
+      weekMap[fd].flower[h.strain].p35_gross += grossUnits35;
+      weekMap[fd].flower[h.strain].p35_net += Math.floor(netWeight / 3.5);
+      weekMap[fd].flower[h.strain].p7_gross += Math.floor(grossWeight / 7);
+      weekMap[fd].flower[h.strain].p7_net += Math.floor(netWeight / 7);
+      weekMap[fd].flower[h.strain].p28_gross += Math.floor(grossWeight / 28);
+      weekMap[fd].flower[h.strain].p28_net += Math.floor(netWeight / 28);
+      weekMap[fd].flower[h.strain].pm_gross += h.pm;
+      weekMap[fd].flower[h.strain].pm_net += Math.max(0, h.pm - ded.pm);
+    }
+
+    if (h.type === 'joints') {
+      if (!weekMap[fd].joints[h.strain]) weekMap[fd].joints[h.strain] = { j1_gross:0,j1_net:0,j2_gross:0,j2_net:0,j10_gross:0,j10_net:0 };
+      weekMap[fd].joints[h.strain].j1_gross += h.j1;
+      weekMap[fd].joints[h.strain].j1_net += Math.max(0, h.j1 - ded.j1);
+      weekMap[fd].joints[h.strain].j2_gross += h.j2;
+      weekMap[fd].joints[h.strain].j2_net += Math.max(0, h.j2 - ded.j2);
+      weekMap[fd].joints[h.strain].j10_gross += h.j10;
+      weekMap[fd].joints[h.strain].j10_net += Math.max(0, h.j10 - ded.j10);
+    }
+
+    if (h.type === 'vape') {
+      if (!weekMap[fd].vape[h.strain]) weekMap[fd].vape[h.strain] = { units: 0 };
+      weekMap[fd].vape[h.strain].units += h.units;
+    }
+  });
+
+  // Urgency helper
+  function urgency(gross, net) {
+    if (gross <= 0) return { pct:100, label:'' };
+    var pct = Math.round(((gross - net) / gross) * 100);
+    if (net <= 0) return { pct:100, label:'soldout' };
+    if (pct >= 80) return { pct:pct, label:'almost' };
+    if (pct >= 50) return { pct:pct, label:'going' };
+    return { pct:pct, label:'' };
+  }
+
+  // Convert to WEEKS array
+  var weeks = Object.keys(weekMap).sort().map(function(dateStr, idx) {
+    var w = weekMap[dateStr];
+    var categories = [];
+    var d = new Date(dateStr + 'T12:00');
+    var isConfirmed = d <= new Date(new Date().getTime() + 21 * 86400000); // within 3 weeks
+
+    // Flower category
+    var flowerStrains = Object.keys(w.flower);
+    if (flowerStrains.length > 0) {
+      var p35Products = [];
+      var p7Products = [];
+      var p28Products = [];
+      var pmProducts = [];
+      flowerStrains.sort().forEach(function(strain) {
+        var avail = w.flower[strain];
+        var strainId = strain.replace(/[^a-z0-9]/gi, '_').toLowerCase() + '_' + dateStr.replace(/-/g, '');
+
+        // Always show all flower sizes for every strain — never mark sold out
+        p35Products.push({
+          id: strainId + '_35', name: strain, price: PRICES.p35,
+          available: Math.max(1, avail.p35_gross), soldOut: false, urgency: '', presoldPct: 0
+        });
+        p7Products.push({
+          id: strainId + '_7', name: strain, price: PRICES.p7,
+          available: Math.max(1, avail.p7_gross), soldOut: false, urgency: '', presoldPct: 0
+        });
+        p28Products.push({
+          id: strainId + '_28', name: strain, price: PRICES.p28,
+          available: Math.max(1, avail.p28_gross), soldOut: false, urgency: '', presoldPct: 0
+        });
+        pmProducts.push({
+          id: strainId + '_pm', name: strain, price: PRICES.pm,
+          available: Math.max(1, avail.pm_gross), soldOut: false, urgency: '', presoldPct: 0
+        });
+      });
+
+      var flowerSkus = [];
+      if (p35Products.length) flowerSkus.push({ label: '3.5g Flower', products: p35Products });
+      if (p7Products.length) flowerSkus.push({ label: '7g Flower', products: p7Products });
+      if (pmProducts.length) flowerSkus.push({ label: '14g Micros', products: pmProducts });
+      if (p28Products.length) flowerSkus.push({ label: '28g Flower', products: p28Products });
+      if (flowerSkus.length) categories.push({ name: 'Flower', skus: flowerSkus });
+    }
+
+    // Joints category
+    var jointStrains = Object.keys(w.joints);
+    if (jointStrains.length > 0) {
+      var j1Products = [], j2Products = [], j10Products = [];
+      jointStrains.sort().forEach(function(strain) {
+        var avail = w.joints[strain];
+        var strainId = strain.replace(/[^a-z0-9]/gi, '_').toLowerCase() + '_' + dateStr.replace(/-/g, '');
+
+        // Always show all joint sizes for every strain
+        j1Products.push({ id: strainId+'_j1', name: strain, price: PRICES.j1, available: Math.max(1, avail.j1_gross), soldOut: false, urgency: '', presoldPct: 0 });
+        j2Products.push({ id: strainId+'_j2', name: strain, price: PRICES.j2, available: Math.max(1, avail.j2_gross), soldOut: false, urgency: '', presoldPct: 0 });
+        j10Products.push({ id: strainId+'_j10', name: strain, price: PRICES.j10, available: Math.max(1, avail.j10_gross), soldOut: false, urgency: '', presoldPct: 0 });
+      });
+
+      var jointSkus = [];
+      if (j1Products.length) jointSkus.push({ label: '1g Singles', products: j1Products });
+      if (j2Products.length) jointSkus.push({ label: '2pk Joints', products: j2Products });
+      if (j10Products.length) jointSkus.push({ label: '10pk Joints', products: j10Products });
+      if (jointSkus.length) categories.push({ name: 'Joints', skus: jointSkus });
+    }
+
+    // Vape/Live Resin category
+    var vapeStrains = Object.keys(w.vape);
+    if (vapeStrains.length > 0) {
+      var vapeProducts = [];
+      vapeStrains.sort().forEach(function(strain) {
+        var strainId = strain.replace(/[^a-z0-9]/gi, '_').toLowerCase() + '_' + dateStr.replace(/-/g, '');
+        vapeProducts.push({
+          id: strainId + '_vape',
+          name: strain,
+          price: PRICES.vape,
+          available: w.vape[strain].units,
+          soldOut: w.vape[strain].units <= 0
+        });
+      });
+      if (vapeProducts.length) {
+        categories.push({ name: 'Vapes', skus: [{ label: 'Live Resin · 0.5g Cart', products: vapeProducts }] });
+      }
+    }
+
+    if (categories.length === 0) return null;
+
+    return {
+      id: 'w_' + dateStr.replace(/-/g, ''),
+      date: d.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' }),
+      dateStr: dateStr,
+      status: isConfirmed ? 'confirmed' : 'projected',
+      categories: categories
+    };
+  }).filter(Boolean);
+
+  return weeks;
+}
+
+// ── WEEK EXPAND/COLLAPSE ──
+if (!window._expandedWeeks) window._expandedWeeks = {};
+
+function toggleWeekExpand(weekId) {
+  if (window._expandedWeeks[weekId]) {
+    delete window._expandedWeeks[weekId];
+  } else {
+    // Accordion: close all others, open this one
+    window._expandedWeeks = {};
+    window._expandedWeeks[weekId] = true;
+  }
+  renderWeeks();
+  if (window._expandedWeeks[weekId]) {
+    setTimeout(function() {
+      var el = document.getElementById('wk-card-' + weekId);
+      if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }, 50);
+  }
+}
+
+function addToCartWeek(weekId, pid) {
+  if (!cart[weekId]) cart[weekId] = {};
+  cart[weekId][pid] = 1;
+  renderWeeks(); updateCartBadge();
+}
+
+function adjustCartWeek(weekId, pid, delta) {
+  var newQty = ((cart[weekId] || {})[pid] || 0) + delta;
+  if (newQty <= 0) { delete cart[weekId][pid]; if (Object.keys(cart[weekId]).length === 0) delete cart[weekId]; }
+  else { if (!cart[weekId]) cart[weekId] = {}; cart[weekId][pid] = newQty; }
+  renderWeeks(); updateCartBadge();
+}
+
+function setCaseQtyWeek(weekId, pid, caseSize) {
+  if (!cart[weekId]) cart[weekId] = {};
+  var current = cart[weekId][pid] || 0;
+  cart[weekId][pid] = current + caseSize;
+  renderWeeks(); updateCartBadge();
+}
+
+function setQtyWeek(weekId, pid, qty) {
+  if (qty <= 0) {
+    if (cart[weekId]) { delete cart[weekId][pid]; if (Object.keys(cart[weekId]).length === 0) delete cart[weekId]; }
+  } else {
+    if (!cart[weekId]) cart[weekId] = {};
+    cart[weekId][pid] = qty;
+  }
+  renderWeeks(); updateCartBadge();
+}
+
+// ── FILTERS ──
+function applyFilters() { renderWeeks(); }
+function clearFilters() {
+  var s = document.getElementById('filterStrain'); if (s) s.value = '';
+  var t = document.getElementById('filterProductType'); if (t) t.value = '';
+  var z = document.getElementById('filterProductSize'); if (z) z.value = '';
+  renderWeeks();
+}
+
+// ── NAVIGATION ──
+function goTo(n) {
+  document.querySelectorAll('.screen').forEach(function(s) { s.classList.remove('active'); });
+  document.getElementById('screen-' + n).classList.add('active');
+  window.scrollTo(0, 0);
+  updateCartBadge();
+}
+
+function goToReview() {
+  if (totalItemCount() === 0) return;
+  renderReview();
+  goTo(3);
+}
+
+function updateCartBadge() {
+  var count = totalItemCount();
+  var badge = document.getElementById('cart-badge');
+  var label = document.getElementById('cart-badge-label');
+  if (count === 0) {
+    badge.style.display = 'none';
+  } else {
+    badge.style.display = 'flex';
+    label.textContent = count + ' item' + (count === 1 ? '' : 's') + ' · ' + fmt(grandTotal());
+  }
+  // Also refresh the floating cart whenever cart contents change
+  if (typeof renderSideCart === 'function') renderSideCart();
+}
+
+// ── SCREEN 1: WEEKS ──
+function renderWeeks() {
+  var container = document.getElementById('week-list');
+  if (!WEEKS.length) {
+    container.innerHTML = '<div class="loading" style="color:#999">No upcoming inventory available.</div>';
+    return;
+  }
+
+  var CAT_COLORS = {
+    'Flower':           { bg: '#EAF3DE', color: '#27500A' },
+    'Joints':           { bg: '#FAEEDA', color: '#633806' },
+    'Infused Pre-Rolls':{ bg: '#EEEDFE', color: '#3C3489' },
+    'Vapes':            { bg: '#E1F5EE', color: '#085041' },
+  };
+
+  // Show filters once data is loaded
+  var filtersEl = document.getElementById('portal-filters');
+  if (filtersEl && WEEKS.length > 0) filtersEl.style.display = 'flex';
+
+  var strainFilter = (document.getElementById('filterStrain') || {}).value || '';
+  var typeFilter = (document.getElementById('filterProductType') || {}).value || '';
+  var sizeFilter = (document.getElementById('filterProductSize') || {}).value || '';
+  var strainQ = strainFilter.toLowerCase();
+
+  // Map size filter to SKU labels
+  var sizeMap = { '3.5g': '3.5g Flower', '7g': '7g Flower', '14g': '14g Micros', '28g': '28g Flower', '1g': '1g Singles', '2pk': '2pk Joints', '10pk': '10pk Joints', 'vape': '0.5g Vape Cart' };
+  var sizeLabel = sizeMap[sizeFilter] || '';
+
+  container.innerHTML = WEEKS.map(function(week) {
+    // Apply filters — filter categories and products
+    var filteredCats = week.categories.map(function(cat) {
+      // Product type filter
+      if (typeFilter && cat.name !== typeFilter) return null;
+
+      var filteredSkus = cat.skus.map(function(sku) {
+        // Size filter
+        if (sizeLabel && sku.label !== sizeLabel) return null;
+        // Strain filter
+        var filteredProducts = sku.products.filter(function(p) {
+          if (strainQ && p.name.toLowerCase().indexOf(strainQ) === -1) return false;
+          return true;
+        });
+        if (filteredProducts.length === 0) return null;
+        return Object.assign({}, sku, { products: filteredProducts });
+      }).filter(Boolean);
+
+      if (filteredSkus.length === 0) return null;
+      return Object.assign({}, cat, { skus: filteredSkus });
+    }).filter(Boolean);
+
+    if (filteredCats.length === 0) return ''; // Hide week if no matching products
+
+    // Use filteredCats for display
+    var weekForDisplay = Object.assign({}, week, { categories: filteredCats });
+    var isConf = week.status === 'confirmed';
+    var itemCount = weekItemCount(week.id);
+    var hasItems = itemCount > 0;
+
+    var groupsHTML = '';
+    // Build two-column layout: FLOWER (left) and JOINTS (right)
+    var flowerCat = weekForDisplay.categories.find(function(c){ return c.name === 'Flower'; });
+    var jointsCat = weekForDisplay.categories.find(function(c){ return c.name === 'Joints'; });
+    var infusedCat = weekForDisplay.categories.find(function(c){ return c.name === 'Infused Pre-Rolls'; });
+    var vapeCat = weekForDisplay.categories.find(function(c){ return c.name === 'Vapes'; });
+
+    function strainList(cat) {
+      if (!cat) return '';
+      var strains = [];
+      cat.skus.forEach(function(sku) {
+        sku.products.forEach(function(p) {
+          if (!p.soldOut && !strains.some(function(s){ return s === p.name; })) strains.push(p.name);
+        });
+      });
+      var html = strains.map(function(s){
+        var type = (window.STRAIN_TYPES || {})[s.toLowerCase()] || '';
+        var typeColor = type.toLowerCase() === 'indica' ? '#7C3AED' : type.toLowerCase() === 'sativa' ? '#EC4899' : type.toLowerCase() === 'hybrid' ? '#16A34A' : '#999';
+        var typeHtml = type ? ' <span style="font-style:italic;color:' + typeColor + ';font-size:11px">' + type + '</span>' : '';
+        return '<div style="font-size:12px;color:#333;padding:2px 0">' + s + typeHtml + '</div>';
+      }).join('');
+      return html;
+    }
+
+    function sizeLabels(cat) {
+      if (!cat) return '';
+      var sizes = [];
+      cat.skus.forEach(function(sku) {
+        if (sku.products.some(function(p){ return !p.soldOut; })) sizes.push(sku.label);
+      });
+      return sizes.join(' - ');
+    }
+
+    // Two-column layout
+    var hasFlower = flowerCat && flowerCat.skus.some(function(s){ return s.products.some(function(p){ return !p.soldOut; }); });
+    var hasJoints = jointsCat && jointsCat.skus.some(function(s){ return s.products.some(function(p){ return !p.soldOut; }); });
+    var hasInfused = infusedCat && infusedCat.skus.some(function(s){ return s.products.some(function(p){ return !p.soldOut; }); });
+    var hasVapes = vapeCat && vapeCat.skus.some(function(s){ return s.products.some(function(p){ return !p.soldOut; }); });
+
+    groupsHTML = '<div style="display:flex;gap:0;width:100%">';
+
+    // Left column: FLOWER
+    if (hasFlower) {
+      groupsHTML += '<div style="flex:1;min-width:0;padding:8px 16px 8px 0;' + (hasJoints || hasInfused || hasVapes ? 'border-right:1px solid #e8e8e6' : '') + '">';
+      groupsHTML += '<div style="font-size:12px;font-weight:800;color:#D2232A;letter-spacing:.03em;margin-bottom:2px">FLOWER</div>';
+      groupsHTML += '<div style="font-size:10px;color:#999;margin-bottom:8px">' + sizeLabels(flowerCat) + '</div>';
+      groupsHTML += strainList(flowerCat);
+      groupsHTML += '</div>';
+    }
+
+    // Right column: JOINTS (+ Infused + Vapes)
+    if (hasJoints || hasInfused || hasVapes) {
+      groupsHTML += '<div style="flex:1;min-width:0;padding:8px 0 8px 16px">';
+      if (hasJoints) {
+        groupsHTML += '<div style="font-size:12px;font-weight:800;color:#D2232A;letter-spacing:.03em;margin-bottom:2px">JOINTS</div>';
+        groupsHTML += '<div style="font-size:10px;color:#999;margin-bottom:8px">' + sizeLabels(jointsCat) + '</div>';
+        groupsHTML += strainList(jointsCat);
+      }
+      if (hasInfused) {
+        groupsHTML += '<div style="' + (hasJoints ? 'margin-top:14px;padding-top:10px;border-top:1px solid #eee;' : '') + '">';
+        groupsHTML += '<div style="font-size:12px;font-weight:800;color:#3C3489;letter-spacing:.03em;margin-bottom:2px">INFUSED PRE-ROLLS</div>';
+        groupsHTML += '<div style="font-size:10px;color:#999;margin-bottom:8px">' + sizeLabels(infusedCat) + '</div>';
+        groupsHTML += strainList(infusedCat);
+        groupsHTML += '</div>';
+      }
+      if (hasVapes) {
+        groupsHTML += '<div style="' + (hasJoints || hasInfused ? 'margin-top:14px;padding-top:10px;border-top:1px solid #eee;' : '') + '">';
+        groupsHTML += '<div style="font-size:12px;font-weight:800;color:#085041;letter-spacing:.03em;margin-bottom:2px">VAPES</div>';
+        groupsHTML += strainList(vapeCat);
+        groupsHTML += '</div>';
+      }
+      groupsHTML += '</div>';
+    }
+
+    groupsHTML += '</div>';
+
+    var cartSummary = hasItems
+      ? '<span class="wk-cart-summary">' + itemCount + ' item' + (itemCount === 1 ? '' : 's') + ' · ' + fmt(weekCartTotal(week.id)) + '</span>'
+      : '';
+
+    // Build inline product list for expansion — compact grid layout
+    var isExpanded = (window._expandedWeeks || {})[week.id];
+
+    function qtyCtrl(weekId, pid, qty) {
+      if (qty === 0) {
+        return '<select style="font-size:11px;padding:3px 2px;border:1px solid #ddd;border-radius:5px;background:#fff;cursor:pointer;min-width:50px;font-family:inherit;color:#666" onclick="event.stopPropagation()" onchange="event.stopPropagation();if(this.value===\'custom\'){var v=prompt(\'Enter quantity:\');v=parseInt(v);if(v>0){setQtyWeek(\'' + weekId + '\',\'' + pid + '\',v)}this.value=\'\';}else{var v=parseInt(this.value);if(v>0){setQtyWeek(\'' + weekId + '\',\'' + pid + '\',v)}this.value=\'\';}">'
+          + '<option value="">Qty</option>'
+          + '<option value="5">5</option>'
+          + '<option value="10">10</option>'
+          + '<option value="15">15</option>'
+          + '<option value="20">20</option>'
+          + '<option value="25">25</option>'
+          + '<option value="50">50</option>'
+          + '<option value="custom">Custom</option>'
+          + '</select>';
+      }
+      return '<div style="display:flex;align-items:center;gap:2px">'
+        + '<button style="width:20px;height:20px;border:1px solid #ddd;border-radius:4px;background:#fff;cursor:pointer;font-size:12px;line-height:1;padding:0;color:#333" onclick="event.stopPropagation();adjustCartWeek(\'' + weekId + '\',\'' + pid + '\',-1)">-</button>'
+        + '<input type="number" min="0" value="' + qty + '" style="width:34px;text-align:center;font-size:11px;font-weight:600;border:1px solid #ddd;border-radius:4px;padding:2px;font-family:inherit" onclick="event.stopPropagation()" onchange="event.stopPropagation();var v=parseInt(this.value);setQtyWeek(\'' + weekId + '\',\'' + pid + '\',v||0)">'
+        + '<button style="width:20px;height:20px;border:1px solid #ddd;border-radius:4px;background:#fff;cursor:pointer;font-size:12px;line-height:1;padding:0;color:#333" onclick="event.stopPropagation();adjustCartWeek(\'' + weekId + '\',\'' + pid + '\',1)">+</button>'
+        + '</div>';
+    }
+
+    var productsHTML = '';
+    if (isExpanded) {
+      // Group products by strain across all sizes
+      var flowerStrains = {};
+      var jointStrains = {};
+
+      weekForDisplay.categories.forEach(function(cat) {
+        var isFlower = cat.name === 'Flower';
+        var target = isFlower ? flowerStrains : jointStrains;
+        cat.skus.forEach(function(sku) {
+          sku.products.forEach(function(p) {
+            if (p.soldOut) return;
+            if (!target[p.name]) target[p.name] = { name: p.name, sizes: {} };
+            // Determine size key from product ID suffix
+            var suffix = p.id.split('_').pop();
+            target[p.name].sizes[suffix] = p;
+          });
+        });
+      });
+
+      // FLOWER grid
+      var fStrainNames = Object.keys(flowerStrains).sort();
+      if (fStrainNames.length) {
+        productsHTML += '<div style="margin-bottom:16px">';
+        productsHTML += '<div style="font-size:12px;font-weight:800;color:#D2232A;margin-bottom:8px;border-left:3px solid #D2232A;padding-left:10px">FLOWER</div>';
+        // Header row
+        productsHTML += '<div style="display:grid;grid-template-columns:1fr repeat(4,minmax(70px,90px));gap:0;border-bottom:2px solid #e8e8e6;padding:4px 0">';
+        productsHTML += '<div style="font-size:9px;font-weight:700;color:#999;text-transform:uppercase;padding:0 4px">Strain</div>';
+        productsHTML += '<div style="font-size:9px;font-weight:700;color:#999;text-transform:uppercase;text-align:center">3.5g</div>';
+        productsHTML += '<div style="font-size:9px;font-weight:700;color:#999;text-transform:uppercase;text-align:center">7g</div>';
+        productsHTML += '<div style="font-size:9px;font-weight:700;color:#999;text-transform:uppercase;text-align:center">14g</div>';
+        productsHTML += '<div style="font-size:9px;font-weight:700;color:#999;text-transform:uppercase;text-align:center">28g</div>';
+        productsHTML += '</div>';
+
+        fStrainNames.forEach(function(name, i) {
+          var s = flowerStrains[name];
+          var strainType = (window.STRAIN_TYPES || {})[name.toLowerCase()] || '';
+          var stColor = strainType.toLowerCase() === 'indica' ? '#7C3AED' : strainType.toLowerCase() === 'sativa' ? '#EC4899' : strainType.toLowerCase() === 'hybrid' ? '#16A34A' : '#999';
+          var typeTag = strainType ? '<span style="font-style:italic;color:' + stColor + ';font-size:10px;margin-left:4px">' + strainType + '</span>' : '';
+          var bg = i % 2 === 0 ? '' : 'background:#fafaf8;';
+
+          productsHTML += '<div style="display:grid;grid-template-columns:1fr repeat(4,minmax(70px,90px));gap:0;align-items:center;border-bottom:1px solid #f0f0ee;padding:6px 0;' + bg + '">';
+          productsHTML += '<div style="font-size:12px;font-weight:600;padding:0 4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' + name + typeTag + '</div>';
+
+          ['35','7','pm','28'].forEach(function(size) {
+            var p = s.sizes[size];
+            if (p) {
+              var qty = (cart[week.id] || {})[p.id] || 0;
+              productsHTML += '<div style="text-align:center;padding:2px">' + qtyCtrl(week.id, p.id, qty) + '</div>';
+            } else {
+              productsHTML += '<div style="text-align:center;color:#ddd;font-size:10px">-</div>';
+            }
+          });
+          productsHTML += '</div>';
+        });
+        productsHTML += '</div>';
+      }
+
+      // JOINTS grid
+      var jStrainNames = Object.keys(jointStrains).sort();
+      if (jStrainNames.length) {
+        productsHTML += '<div style="margin-bottom:16px">';
+        productsHTML += '<div style="font-size:12px;font-weight:800;color:#D2232A;margin-bottom:8px;border-left:3px solid #D2232A;padding-left:10px">JOINTS</div>';
+        // Header row
+        productsHTML += '<div style="display:grid;grid-template-columns:1fr repeat(3,minmax(70px,90px));gap:0;border-bottom:2px solid #e8e8e6;padding:4px 0">';
+        productsHTML += '<div style="font-size:9px;font-weight:700;color:#999;text-transform:uppercase;padding:0 4px">Strain</div>';
+        productsHTML += '<div style="font-size:9px;font-weight:700;color:#999;text-transform:uppercase;text-align:center">1g</div>';
+        productsHTML += '<div style="font-size:9px;font-weight:700;color:#999;text-transform:uppercase;text-align:center">2pk</div>';
+        productsHTML += '<div style="font-size:9px;font-weight:700;color:#999;text-transform:uppercase;text-align:center">10pk</div>';
+        productsHTML += '</div>';
+
+        jStrainNames.forEach(function(name, i) {
+          var s = jointStrains[name];
+          var strainType = (window.STRAIN_TYPES || {})[name.toLowerCase()] || '';
+          var stColor = strainType.toLowerCase() === 'indica' ? '#7C3AED' : strainType.toLowerCase() === 'sativa' ? '#EC4899' : strainType.toLowerCase() === 'hybrid' ? '#16A34A' : '#999';
+          var typeTag = strainType ? '<span style="font-style:italic;color:' + stColor + ';font-size:10px;margin-left:4px">' + strainType + '</span>' : '';
+          var bg = i % 2 === 0 ? '' : 'background:#fafaf8;';
+
+          productsHTML += '<div style="display:grid;grid-template-columns:1fr repeat(3,minmax(70px,90px));gap:0;align-items:center;border-bottom:1px solid #f0f0ee;padding:6px 0;' + bg + '">';
+          productsHTML += '<div style="font-size:12px;font-weight:600;padding:0 4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' + name + typeTag + '</div>';
+
+          ['j1','j2','j10'].forEach(function(size) {
+            var p = s.sizes[size];
+            if (p) {
+              var qty = (cart[week.id] || {})[p.id] || 0;
+              productsHTML += '<div style="text-align:center;padding:2px">' + qtyCtrl(week.id, p.id, qty) + '</div>';
+            } else {
+              productsHTML += '<div style="text-align:center;color:#ddd;font-size:10px">-</div>';
+            }
+          });
+          productsHTML += '</div>';
+        });
+        productsHTML += '</div>';
+      }
+    }
+
+    return '<div class="week-card' + (hasItems ? ' has-cart' : '') + (isConf ? '' : ' projected') + (isExpanded ? ' expanded' : '') + '" id="wk-card-' + week.id + '" style="overflow:hidden;padding:0">'
+      + '<div class="week-card-header" onclick="toggleWeekExpand(\'' + week.id + '\')" style="background:#D2232A;padding:12px 22px;cursor:pointer;display:flex;justify-content:space-between;align-items:center">'
+      + '<div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">'
+      + '<span style="font-size:15px;font-weight:800;color:#fff">Week of ' + week.date + '</span>'
+      + (isConf ? '' : '<span style="font-size:10px;font-weight:700;padding:2px 9px;border-radius:99px;background:rgba(255,255,255,.2);color:#fff">Projected</span>')
+      + (cartSummary ? '<span style="font-size:11px;font-weight:700;padding:2px 9px;border-radius:99px;background:rgba(255,255,255,.25);color:#fff">' + itemCount + ' item' + (itemCount===1?'':'s') + ' - ' + fmt(weekCartTotal(week.id)) + '</span>' : '')
+      + '</div>'
+      + '<span class="wk-toggle" style="color:#fff;font-size:18px">›</span></div>'
+      + (!isExpanded ? '<div style="padding:12px 22px">' + groupsHTML + '</div>' : '')
+      + '<div class="week-card-body"' + (isExpanded ? ' style="display:block;padding:0 22px 18px"' : '') + '>' + productsHTML + '</div>'
+      + '</div>';
+  }).join('');
+}
+
+// ── SCREEN 2: ORDER ──
+function selectWeek(weekId) {
+  window._expandedWeeks[weekId] = true;
+  renderWeeks();
+  goTo(1);
+  // Scroll to the expanded week card
+  setTimeout(function() {
+    var el = document.getElementById('wk-card-' + weekId);
+    if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }, 100);
+}
+
+function renderOrderScreen() {
+  var week = getWeek(currentWeekId);
+  document.getElementById('product-list').innerHTML = week.categories.map(function(cat) {
+    var skusHTML = cat.skus.map(function(sku) {
+      var rowsHTML = sku.products.map(function(p) {
+        var qty = (cart[currentWeekId] || {})[p.id] || 0;
+        var strainType = (window.STRAIN_TYPES || {})[p.name.toLowerCase()] || '';
+        var stColor = strainType.toLowerCase() === 'indica' ? '#7C3AED' : strainType.toLowerCase() === 'sativa' ? '#EC4899' : strainType.toLowerCase() === 'hybrid' ? '#16A34A' : '#999';
+        var typeTag = strainType ? '<span style="font-style:italic;color:' + stColor + ';font-size:10px;margin-left:6px">' + strainType + '</span>' : '';
+        return '<div class="prod-row" id="row-' + p.id + '"><div><span class="prod-name">' + p.name + '</span>' + typeTag + '<span class="prod-price">' + fmt(p.price) + '/unit</span>'
+          + '</div>'
+          + '<div style="display:flex;align-items:center;gap:6px">'
+          + '<div class="case-btns">'
+          + '<button class="case-btn" onclick="event.stopPropagation();setCaseQty(\'' + p.id + '\',10)" title="Add case of 10">10</button>'
+          + '<button class="case-btn" onclick="event.stopPropagation();setCaseQty(\'' + p.id + '\',15)" title="Add case of 15">15</button>'
+          + '<button class="case-btn" onclick="event.stopPropagation();setCaseQty(\'' + p.id + '\',25)" title="Add case of 25">25</button>'
+          + '</div>'
+          + (qty === 0
+            ? '<button class="add-btn" onclick="event.stopPropagation();addToCart(\'' + p.id + '\')">+ Add</button>'
+            : '<div class="qty-ctrl"><button class="qty-btn" onclick="event.stopPropagation();adjustCart(\'' + p.id + '\',-1)">−</button><input class="qty-val" value="' + qty + '" readonly><button class="qty-btn" onclick="event.stopPropagation();adjustCart(\'' + p.id + '\',1)">+</button></div>')
+          + '</div></div>';
+      }).join('');
+      return '<div class="sku-blk"><div class="sku-lbl">' + sku.label + '</div>' + rowsHTML + '</div>';
+    }).join('');
+    return '<div><div class="cat-hdr"><div class="cat-name">' + cat.name + '</div></div>' + skusHTML + '</div>';
+  }).join('');
+  renderSideCart();
+}
+
+function addToCart(pid) {
+  if (!cart[currentWeekId]) cart[currentWeekId] = {};
+  cart[currentWeekId][pid] = 1;
+  renderOrderScreen(); renderWeeks(); updateCartBadge();
+}
+function setCaseQty(pid, caseSize) {
+  if (!cart[currentWeekId]) cart[currentWeekId] = {};
+  var current = cart[currentWeekId][pid] || 0;
+  cart[currentWeekId][pid] = current + caseSize;
+  renderOrderScreen(); renderWeeks(); updateCartBadge();
+}
+function adjustCart(pid, delta) {
+  var newQty = ((cart[currentWeekId] || {})[pid] || 0) + delta;
+  if (newQty <= 0) { delete cart[currentWeekId][pid]; if (Object.keys(cart[currentWeekId]).length === 0) delete cart[currentWeekId]; }
+  else { if (!cart[currentWeekId]) cart[currentWeekId] = {}; cart[currentWeekId][pid] = newQty; }
+  renderOrderScreen(); renderWeeks(); updateCartBadge();
+}
+
+function renderSideCart() {
+  var fc = document.getElementById('floating-cart');
+  if (!fc) return;
+
+  var allCount = totalItemCount();
+  var weeksWithItems = WEEKS.filter(function(w) { return weekItemCount(w.id) > 0; });
+
+  // Hide cart entirely when empty
+  if (allCount === 0) {
+    fc.classList.remove('has-items');
+    return;
+  }
+  fc.classList.add('has-items');
+  applyFloatingCartState();
+
+  // ── 1. Header: account info + summary ──
+  var acctName = CONTACT_DATA.account || (ACCT_PARAM ? decodeURIComponent(ACCT_PARAM) : '');
+  var contact = CONTACT_DATA.name || '';
+  document.getElementById('fc-acct-name').textContent = acctName || (contact || 'Reservation');
+  document.getElementById('fc-summary').textContent = allCount + ' item' + (allCount === 1 ? '' : 's')
+    + ' · ' + fmt(grandTotal())
+    + (weeksWithItems.length > 1 ? ' · ' + weeksWithItems.length + ' weeks' : '');
+
+  // ── 2. Body: group by week ──
+  var bodyEl = document.getElementById('fc-body');
+
+  // Sort: current week (if any items) first, then chronological
+  weeksWithItems.sort(function(a, b) {
+    if (a.id === currentWeekId) return -1;
+    if (b.id === currentWeekId) return 1;
+    return 0;
+  });
+
+  var html = '';
+  weeksWithItems.forEach(function(week) {
+    var wc = cart[week.id] || {};
+    var entries = Object.entries(wc);
+    if (entries.length === 0) return;
+
+    var isCurrent = week.id === currentWeekId;
+    var weekClass = isCurrent ? 'fc-week-current' : 'fc-week-other';
+    var label = isCurrent ? week.date + ' · This week' : week.date;
+
+    html += '<div class="fc-week-section">';
+    html += '<div class="fc-week-hdr ' + weekClass + '">' + label + '</div>';
+
+    entries.forEach(function(entry) {
+      var id = entry[0], qty = entry[1];
+      var p = getProduct(week.id, id);
+      if (!p) return;
+      html += '<div class="fc-item">'
+        + '<div class="fc-item-info">'
+        +   '<div class="fc-item-name">' + p.name + '</div>'
+        +   '<div class="fc-item-sub">' + p.skuLabel + ' · qty ' + qty + ' · ' + fmt(p.price) + ' ea</div>'
+        + '</div>'
+        + '<div class="fc-item-right">'
+        +   '<div class="fc-item-price">' + fmt(p.price * qty) + '</div>'
+        +   '<div class="fc-item-remove" onclick="adjustCartWeek(\'' + week.id + '\',\'' + id + '\',-' + qty + ')">remove</div>'
+        + '</div></div>';
+    });
+
+    html += '</div>';
+  });
+
+  bodyEl.innerHTML = html;
+
+  // ── 3. Footer: grand total + Review button ──
+  var footerHtml = '<div class="fc-total-row">'
+    + '<span class="fc-total-lbl">Total</span>'
+    + '<span class="fc-total-val">' + fmt(grandTotal()) + '</span>'
+    + '</div>';
+  if (weeksWithItems.length > 1) {
+    footerHtml += '<div class="fc-sub">Across ' + weeksWithItems.length + ' delivery weeks</div>';
+  } else {
+    footerHtml += '<div class="fc-sub">&nbsp;</div>';
+  }
+  footerHtml += '<button class="fc-btn" onclick="goToReview()">Review &amp; Submit</button>';
+  document.getElementById('fc-footer').innerHTML = footerHtml;
+}
+
+// Toggle floating cart collapsed state
+function toggleFloatingCart() {
+  var fc = document.getElementById('floating-cart');
+  if (!fc) return;
+  fc.classList.toggle('collapsed');
+  // Remember within this session — defaults back to collapsed on reload
+  try {
+    sessionStorage.setItem('rb_cart_expanded', fc.classList.contains('collapsed') ? '0' : '1');
+  } catch(e) {}
+}
+
+// Apply remembered cart state on initial render (defaults to collapsed)
+function applyFloatingCartState() {
+  var fc = document.getElementById('floating-cart');
+  if (!fc) return;
+  var expanded = '0';
+  try { expanded = sessionStorage.getItem('rb_cart_expanded') || '0'; } catch(e) {}
+  if (expanded === '1') fc.classList.remove('collapsed');
+  else fc.classList.add('collapsed');
+}
+
+// ── SCREEN 3: REVIEW ──
+function renderReview() {
+  var weeksWithItems = WEEKS.filter(function(w) { return weekItemCount(w.id) > 0; });
+
+  document.getElementById('review-weeks').innerHTML = weeksWithItems.map(function(week) {
+    var wc = cart[week.id] || {};
+    var rows = Object.entries(wc).map(function(entry) {
+      var id = entry[0], qty = entry[1];
+      var p = getProduct(week.id, id);
+      if (!p) return '';
+      return '<div class="rwb-row"><div><div class="rwb-name">' + p.name + '</div><div class="rwb-sku">' + p.skuLabel + ' · qty ' + qty + '</div></div>'
+        + '<div><div class="rwb-price">' + fmt(p.price * qty) + '</div></div></div>';
+    }).join('');
+    return '<div class="review-week-block"><div class="rwb-header"><span class="rwb-date">Delivers ' + week.date + '</span>'
+      + '<span class="rwb-edit" onclick="selectWeek(\'' + week.id + '\')">Edit</span></div>' + rows + '</div>';
+  }).join('');
+
+  document.getElementById('review-week-totals').innerHTML = weeksWithItems.map(function(week) {
+    return '<div class="rs-week-line"><span>' + week.date + '</span><span class="rs-week-val">' + fmt(weekCartTotal(week.id)) + '</span></div>';
+  }).join('');
+
+  document.getElementById('review-grand-total').textContent = fmt(grandTotal());
+}
+
+// ── SUBMIT ──
+function submitOrder() {
+  var orderId = genId();
+  var weeks = WEEKS.filter(function(w) { return weekItemCount(w.id) > 0; }).map(function(week) {
+    return {
+      week: week,
+      items: Object.entries(cart[week.id] || {}).map(function(entry) {
+        var id = entry[0], qty = entry[1];
+        var p = getProduct(week.id, id);
+        return Object.assign({}, p, { qty: qty, lineTotal: p.price * qty });
+      }),
+      total: weekCartTotal(week.id)
+    };
+  });
+  submittedOrder = { orderId: orderId, weeks: weeks, grandTotal: grandTotal() };
+  editCart = JSON.parse(JSON.stringify(cart));
+
+  // Send ALL line items in a single POST to Apps Script
+  try {
+    var acctName = ACCT_PARAM ? decodeURIComponent(ACCT_PARAM) : 'Portal Order';
+    var allItems = [];
+    weeks.forEach(function(w) {
+      w.items.forEach(function(item) {
+        allItems.push({
+          deliveryWeek: w.week.dateStr || w.week.date,
+          strain: item.name,
+          productSize: item.skuLabel,
+          qty: item.qty,
+          unitPrice: item.price,
+          lineTotal: item.lineTotal
+        });
+      });
+    });
+
+    fetch(APPS_SCRIPT_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain' },
+      body: JSON.stringify({
+        action: 'writeReservation',
+        reservationId: orderId,
+        account: acctName,
+        contactName: CONTACT_DATA.name || '',
+        contactEmail: CONTACT_DATA.email || EMAIL_PARAM || '',
+        items: allItems,
+        grandTotal: grandTotal(),
+        sendConfirmation: true
+      })
+    }).then(function(r) { return r.json(); }).then(function(result) {
+      if (result.success) {
+        console.log('[Portal] Reservation saved:', result.reservationId, result.count, 'items');
+      } else {
+        console.warn('[Portal] Reservation save failed:', result.error);
+      }
+    }).catch(function(err) {
+      console.warn('[Portal] Reservation POST error:', err);
+    });
+
+    console.log('[Portal] Reservation submitted:', orderId, allItems.length, 'line items');
+  } catch(e) { console.warn('[Portal] Could not log reservation:', e); }
+
+  renderConfirmation();
+  goTo(4);
+}
+
+function renderConfirmation() {
+  var o = submittedOrder;
+  document.getElementById('conf-subject').textContent = 'Reservation confirmed — ' + o.weeks.length + ' delivery week' + (o.weeks.length === 1 ? '' : 's');
+
+  var tableHTML = '<div style="padding:10px 14px 6px;font-size:11px;color:#888;border-bottom:1px solid #eee;">Reservation ' + o.orderId + '</div>';
+  o.weeks.forEach(function(w) {
+    var itemCount = w.items.reduce(function(s, i) { return s + i.qty; }, 0);
+    tableHTML += '<div style="background:#fafaf9;padding:8px 14px 6px;border-bottom:1px solid #eee;display:flex;justify-content:space-between;align-items:center;">'
+      + '<span style="font-size:12px;font-weight:700;">' + w.week.date + '</span>'
+      + '<span style="font-size:10px;color:#aaa;">' + itemCount + ' item' + (itemCount === 1 ? '' : 's') + '</span></div>';
+    w.items.forEach(function(item) {
+      tableHTML += '<div style="display:flex;justify-content:space-between;padding:7px 14px;border-bottom:1px solid #f4f4f2;">'
+        + '<div><div style="font-size:12px;font-weight:500;">' + item.name + '</div><div style="font-size:10px;color:#aaa;">' + item.skuLabel + ' · qty ' + item.qty + '</div></div>'
+        + '<div style="font-size:12px;font-weight:600;">' + fmt(item.lineTotal) + '</div></div>';
+    });
+    tableHTML += '<div style="display:flex;justify-content:space-between;padding:7px 14px 9px;border-bottom:2px solid #eee;"><span style="font-size:11px;color:#888;">Week subtotal</span><span style="font-size:12px;font-weight:700;">' + fmt(w.total) + '</span></div>';
+  });
+  tableHTML += '<div style="display:flex;justify-content:space-between;padding:11px 14px;background:#fafaf9;"><span style="font-size:13px;font-weight:700;">Grand total</span><span style="font-size:15px;font-weight:700;color:#D2232A;">' + fmt(o.grandTotal) + '</span></div>';
+  document.getElementById('conf-order-table').innerHTML = tableHTML;
+}
+
+// ── EDIT ──
+function goToEdit() {
+  editCart = JSON.parse(JSON.stringify(cart));
+  renderEditScreen();
+  goTo(5);
+}
+
+function renderEditScreen() {
+  var o = submittedOrder;
+  document.getElementById('edit-order-id').textContent = o.orderId;
+  document.getElementById('edit-delivery-info').textContent = o.weeks.map(function(w) { return w.week.date; }).join(', ');
+  renderEditItems();
+}
+
+function renderEditItems() {
+  var o = submittedOrder;
+  var tableHTML = '';
+  o.weeks.forEach(function(w) {
+    var wc = editCart[w.week.id] || {};
+    var entries = Object.entries(wc);
+    tableHTML += '<div style="background:#fafaf9;padding:7px 14px;border-bottom:1px solid #eee;font-size:11px;font-weight:700;color:#555;">Delivers ' + w.week.date + '</div>';
+    if (entries.length > 0) {
+      entries.forEach(function(entry) {
+        var id = entry[0], qty = entry[1];
+        var p = getProduct(w.week.id, id);
+        if (!p) return;
+        tableHTML += '<div style="display:flex;align-items:center;justify-content:space-between;padding:8px 14px;border-bottom:1px solid #f4f4f2;">'
+          + '<div><div style="font-size:12px;font-weight:600;">' + p.name + '</div><div style="font-size:10px;color:#aaa;">' + p.skuLabel + '</div></div>'
+          + '<div style="display:flex;align-items:center;gap:8px;">'
+          + '<div class="qty-ctrl"><button class="qty-btn" onclick="adjustEdit(\'' + w.week.id + '\',\'' + id + '\',-1)">−</button><span style="width:32px;text-align:center;font-size:13px;font-weight:700">' + qty + '</span><button class="qty-btn" onclick="adjustEdit(\'' + w.week.id + '\',\'' + id + '\',1)">+</button></div>'
+          + '<span style="color:#D2232A;cursor:pointer;font-size:14px" onclick="removeEdit(\'' + w.week.id + '\',\'' + id + '\')">×</span>'
+          + '</div></div>';
+      });
+    } else {
+      tableHTML += '<div style="padding:8px 14px;font-size:11px;color:#ccc;font-style:italic;">No items for this week</div>';
+    }
+  });
+  document.getElementById('edit-items-table').innerHTML = tableHTML;
+  updateEditTotal();
+}
+
+function adjustEdit(weekId, pid, delta) {
+  var newQty = ((editCart[weekId] || {})[pid] || 0) + delta;
+  if (newQty <= 0) { delete editCart[weekId][pid]; }
+  else { if (!editCart[weekId]) editCart[weekId] = {}; editCart[weekId][pid] = newQty; }
+  renderEditItems();
+}
+function removeEdit(weekId, pid) {
+  if (editCart[weekId]) delete editCart[weekId][pid];
+  renderEditItems();
+}
+function updateEditTotal() {
+  var total = Object.keys(editCart).reduce(function(sum, wid) {
+    return sum + Object.entries(editCart[wid] || {}).reduce(function(s, entry) {
+      var p = getProduct(wid, entry[0]);
+      return s + (p ? p.price * entry[1] : 0);
+    }, 0);
+  }, 0);
+  document.getElementById('edit-total').textContent = fmt(total);
+}
+function saveEdit() {
+  cart = JSON.parse(JSON.stringify(editCart));
+  var weeks = WEEKS.filter(function(w) { return weekItemCount(w.id) > 0; }).map(function(week) {
+    return {
+      week: week,
+      items: Object.entries(cart[week.id] || {}).map(function(entry) {
+        var p = getProduct(week.id, entry[0]);
+        return Object.assign({}, p, { qty: entry[1], lineTotal: p.price * entry[1] });
+      }),
+      total: weekCartTotal(week.id)
+    };
+  });
+  submittedOrder.weeks = weeks;
+  submittedOrder.grandTotal = grandTotal();
+
+  // POST updated items to Apps Script
+  try {
+    var acctName = ACCT_PARAM ? decodeURIComponent(ACCT_PARAM) : 'Portal Order';
+    var allItems = [];
+    weeks.forEach(function(w) {
+      w.items.forEach(function(item) {
+        allItems.push({
+          deliveryWeek: w.week.dateStr || w.week.date,
+          strain: item.name,
+          productSize: item.skuLabel,
+          qty: item.qty,
+          unitPrice: item.price,
+          lineTotal: item.lineTotal
+        });
+      });
+    });
+
+    fetch(APPS_SCRIPT_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain' },
+      body: JSON.stringify({
+        action: 'updateReservation',
+        reservationId: submittedOrder.orderId,
+        account: acctName,
+        items: allItems
+      })
+    }).then(function(r) { return r.json(); }).then(function(result) {
+      console.log('[Portal] Reservation updated:', result);
+    }).catch(function(err) {
+      console.warn('[Portal] Update error:', err);
+    });
+  } catch(e) { console.warn('[Portal] Could not update reservation:', e); }
+
+  renderConfirmation();
+  goTo(4);
+}
+
+// ── SUBMIT CONFIRM ──
+function openSubmitConfirm() {
+  var count = totalItemCount();
+  var summary = count + ' item' + (count === 1 ? '' : 's') + ' across ' + Object.keys(cart).filter(function(k) { return Object.keys(cart[k]).length > 0; }).length + ' delivery week' + (Object.keys(cart).filter(function(k) { return Object.keys(cart[k]).length > 0; }).length === 1 ? '' : 's') + ' for a total of ' + fmt(grandTotal()) + '.';
+  document.getElementById('submit-confirm-summary').textContent = summary;
+  document.getElementById('submit-overlay').classList.add('open');
+}
+function closeSubmitConfirm() { document.getElementById('submit-overlay').classList.remove('open'); }
+
+// ── CANCEL ──
+function openSubmitConfirm() {
+  document.getElementById('submit-confirm-count').textContent = totalItemCount();
+  document.getElementById('submit-confirm-total').textContent = fmt(grandTotal());
+  document.getElementById('submit-overlay').classList.add('open');
+}
+function closeSubmitConfirm() { document.getElementById('submit-overlay').classList.remove('open'); }
+
+function openCancelConfirm() { document.getElementById('cancel-overlay').classList.add('open'); }
+function closeCancelConfirm() { document.getElementById('cancel-overlay').classList.remove('open'); }
+function confirmCancel() {
+  closeCancelConfirm();
+
+  // POST cancellation to Apps Script
+  if (submittedOrder && submittedOrder.orderId) {
+    try {
+      var acctName = ACCT_PARAM ? decodeURIComponent(ACCT_PARAM) : 'Portal Order';
+      fetch(APPS_SCRIPT_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'text/plain' },
+        body: JSON.stringify({
+          action: 'cancelReservation',
+          reservationId: submittedOrder.orderId,
+          account: acctName
+        })
+      }).then(function(r) { return r.json(); }).then(function(result) {
+        console.log('[Portal] Reservation cancelled:', result);
+      }).catch(function(err) {
+        console.warn('[Portal] Cancel error:', err);
+      });
+    } catch(e) { console.warn('[Portal] Could not cancel reservation:', e); }
+  }
+
+  goTo(6);
+}
+function startOver() { cart = {}; submittedOrder = null; editCart = {}; renderWeeks(); updateCartBadge(); goTo(1); }
+
+// ── INIT ──
+document.getElementById('topbar-date').textContent = new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
+
+// If we have account info from URL params, load directly
+if (ACCT_PARAM) {
+  loadPortalData();
+} else {
+  // Show email lookup screen, hide main content
+  document.getElementById('email-lookup-screen').style.display = 'block';
+  document.getElementById('week-list').parentElement.querySelector('.filter-bar').style.display = 'none';
+  document.getElementById('week-list').style.display = 'none';
+}
+
+function lookupEmail() {
+  var emailInput = document.getElementById('lookup-email');
+  var email = (emailInput.value || '').trim().toLowerCase();
+  var errorEl = document.getElementById('lookup-error');
+  var loadingEl = document.getElementById('lookup-loading');
+
+  if (!email || !email.includes('@')) {
+    errorEl.textContent = 'Please enter a valid email address';
+    errorEl.style.display = 'block';
+    return;
+  }
+
+  errorEl.style.display = 'none';
+  loadingEl.style.display = 'block';
+
+  // Look up email in Contacts tab
+  var contactsUrl = 'https://sheets.googleapis.com/v4/spreadsheets/' + CRM_SHEET_ID
+    + '/values/' + encodeURIComponent('Contacts') + '?key=' + SHEETS_API_KEY + '&valueRenderOption=FORMATTED_VALUE';
+
+  fetch(contactsUrl).then(function(r) { return r.json(); }).then(function(d) {
+    var rows = d.values || [];
+    if (rows.length < 2) {
+      loadingEl.style.display = 'none';
+      errorEl.textContent = 'Could not load contact data. Please try again.';
+      errorEl.style.display = 'block';
+      return;
+    }
+
+    var headers = rows[0];
+    var emailCol = headers.findIndex(function(h) { return /email/i.test(h); });
+    var acctCol = headers.findIndex(function(h) { return /account.name/i.test(h); });
+    var firstCol = headers.findIndex(function(h) { return /first.name/i.test(h); });
+    var lastCol = headers.findIndex(function(h) { return /last.name/i.test(h); });
+
+    var match = null;
+    for (var i = 1; i < rows.length; i++) {
+      var rowEmail = (rows[i][emailCol] || '').trim().toLowerCase();
+      if (rowEmail === email) {
+        match = {
+          email: rowEmail,
+          account: (rows[i][acctCol] || '').trim(),
+          firstName: (rows[i][firstCol] || '').trim(),
+          lastName: (rows[i][lastCol] || '').trim()
+        };
+        break;
+      }
+    }
+
+    loadingEl.style.display = 'none';
+
+    if (!match || !match.account) {
+      errorEl.textContent = 'No account found for this email. Please contact your Redbird Cannabis sales rep.';
+      errorEl.style.display = 'block';
+      return;
+    }
+
+    // Set the contact data and load portal
+    ACCT_PARAM = match.account;
+    CONTACT_DATA = {
+      name: match.firstName + (match.lastName ? ' ' + match.lastName : ''),
+      email: email,
+      account: match.account
+    };
+
+    // Update URL without reload
+    var newUrl = window.location.pathname + '?acct=' + encodeURIComponent(match.account)
+      + '&contact=' + encodeURIComponent(CONTACT_DATA.name)
+      + '&email=' + encodeURIComponent(email);
+    history.replaceState(null, '', newUrl);
+
+    // Hide lookup, show portal
+    document.getElementById('email-lookup-screen').style.display = 'none';
+    document.getElementById('week-list').parentElement.querySelector('.filter-bar').style.display = '';
+    document.getElementById('week-list').style.display = '';
+
+    loadPortalData();
+
+  }).catch(function(err) {
+    loadingEl.style.display = 'none';
+    errorEl.textContent = 'Error looking up account: ' + err.message;
+    errorEl.style.display = 'block';
+  });
+}
+</script>
+<!-- FLOATING CART - rendered at body level, position:fixed -->
+<div class="floating-cart collapsed" id="floating-cart">
+  <div class="fc-header" onclick="toggleFloatingCart()">
+    <div class="fc-header-left">
+      <div class="fc-acct-label">Reserving for</div>
+      <div class="fc-acct-name" id="fc-acct-name"></div>
+      <div class="fc-summary" id="fc-summary"></div>
+    </div>
+    <span class="fc-toggle">▾</span>
+  </div>
+  <div class="fc-body" id="fc-body"></div>
+  <div class="fc-footer" id="fc-footer"></div>
+</div>
+
+</body>
+</html>
