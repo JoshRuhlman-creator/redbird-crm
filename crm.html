@@ -456,6 +456,7 @@ select option { background: var(--surface-2); }
   border-collapse: collapse;
   font-family: 'DM Sans', sans-serif;
   font-size: 12.5px;
+  table-layout: fixed;
 }
 .al-table thead th {
   background: var(--surface-2);
@@ -485,20 +486,31 @@ select option { background: var(--surface-2); }
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  max-width: 0;
 }
-.al-table td.al-tcol-rank { width: 48px; color: var(--text-faint); font-family: 'Space Mono', monospace; font-size: 11px; text-align: center; }
-.al-table td.al-tcol-name { font-weight: 600; color: var(--text); max-width: 240px; }
-.al-table td.al-tcol-addr { max-width: 220px; color: var(--text-muted); font-size: 12px; }
-.al-table td.al-tcol-city { max-width: 130px; color: var(--text-muted); }
-.al-table td.al-tcol-state { width: 50px; color: var(--text-faint); }
-.al-table td.al-tcol-rev { width: 90px; text-align: right; font-weight: 700; color: var(--green); font-variant-numeric: tabular-nums; }
-.al-table td.al-tcol-trend { width: 80px; font-weight: 700; font-size: 11.5px; }
-.al-table td.al-tcol-last { width: 100px; color: var(--text-muted); font-size: 11.5px; }
-.al-table td.al-tcol-orders { width: 70px; color: var(--text-muted); font-size: 11.5px; text-align: right; font-variant-numeric: tabular-nums; }
-.al-table td.al-tcol-contacts { width: 70px; color: var(--text-muted); font-size: 11.5px; text-align: center; font-variant-numeric: tabular-nums; }
-.al-table td.al-tcol-arrow { width: 28px; text-align: center; color: var(--text-faint); font-size: 14px; }
+.al-table td.al-tcol-rank { width: 56px; color: var(--text-faint); font-family: 'Space Mono', monospace; font-size: 11px; text-align: center; }
+.al-table td.al-tcol-name { font-weight: 600; color: var(--text); }
+.al-table td.al-tcol-addr { width: 220px; color: var(--text-muted); font-size: 12px; }
+.al-table td.al-tcol-city { width: 130px; color: var(--text-muted); }
+.al-table td.al-tcol-state { width: 60px; color: var(--text-faint); }
+.al-table td.al-tcol-rev { width: 96px; text-align: right; font-weight: 700; color: var(--green); font-variant-numeric: tabular-nums; }
+.al-table td.al-tcol-trend { width: 100px; font-weight: 700; font-size: 11.5px; }
+.al-table td.al-tcol-last { width: 116px; color: var(--text-muted); font-size: 11.5px; }
+.al-table td.al-tcol-orders { width: 76px; color: var(--text-muted); font-size: 11.5px; text-align: right; font-variant-numeric: tabular-nums; }
+.al-table td.al-tcol-contacts { width: 80px; color: var(--text-muted); font-size: 11.5px; text-align: center; font-variant-numeric: tabular-nums; }
+.al-table td.al-tcol-arrow { width: 32px; text-align: center; color: var(--text-faint); font-size: 14px; }
 .al-table tbody tr:hover td.al-tcol-arrow { color: var(--red); }
+/* Apply widths to thead cells too */
+.al-table thead th.al-tcol-rank { width: 56px; text-align: center; }
+.al-table thead th.al-tcol-name { /* flex */ }
+.al-table thead th.al-tcol-addr { width: 220px; }
+.al-table thead th.al-tcol-city { width: 130px; }
+.al-table thead th.al-tcol-state { width: 60px; }
+.al-table thead th.al-tcol-rev { width: 96px; }
+.al-table thead th.al-tcol-trend { width: 100px; }
+.al-table thead th.al-tcol-last { width: 116px; }
+.al-table thead th.al-tcol-orders { width: 76px; }
+.al-table thead th.al-tcol-contacts { width: 80px; }
+.al-table thead th.al-tcol-arrow { width: 32px; }
 
 /* View-toggle button group */
 .acct-view-toggle {
@@ -2233,6 +2245,69 @@ select option { background: var(--surface-2); }
             <button onclick="closeContactModal()" style="background:#fff;color:#666;border:1px solid #ddd;border-radius:7px;padding:9px 14px;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit">Cancel</button>
             <button onclick="saveContactFromModal()" id="cmSaveBtn" style="background:var(--brand);color:#fff;border:none;border-radius:7px;padding:9px 18px;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit">Save</button>
           </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ═══════════════════════════════════════════════════════════════════
+         SUGGEST PURCHASE ORDER MODAL
+         Built from 90-day order history × current in-stock inventory.
+         ═══════════════════════════════════════════════════════════════════ -->
+    <div id="suggestPOModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:1000;align-items:center;justify-content:center" onclick="if(event.target===this)closeSuggestPO()">
+      <div style="background:#fff;border-radius:12px;width:920px;max-width:96vw;max-height:92vh;overflow:hidden;box-shadow:0 16px 48px rgba(0,0,0,.2);display:flex;flex-direction:column">
+        <!-- Header -->
+        <div style="background:#1a1a1a;color:#fff;padding:14px 20px;display:flex;justify-content:space-between;align-items:center;flex-shrink:0">
+          <div>
+            <div style="font-size:14px;font-weight:700;text-transform:uppercase;letter-spacing:.05em">Purchase Order Proposal</div>
+            <div id="poAcctLabel" style="font-size:12px;color:#aaa;margin-top:2px">—</div>
+          </div>
+          <span style="cursor:pointer;font-size:22px;line-height:1;color:#aaa" onclick="closeSuggestPO()">×</span>
+        </div>
+
+        <!-- Top bar: meta + recipients -->
+        <div style="padding:12px 20px;background:#fafaf9;border-bottom:1px solid #eee;flex-shrink:0">
+          <div id="poMetaLine" style="font-size:12px;color:#666;margin-bottom:8px">Loading suggestions…</div>
+          <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+            <label style="font-size:11px;color:#666;font-weight:600;text-transform:uppercase;letter-spacing:.04em">To:</label>
+            <input type="text" id="poRecipients" placeholder="contact@example.com, another@example.com" style="flex:1;min-width:280px;padding:7px 10px;border:1px solid #ddd;border-radius:6px;font-size:12px;font-family:inherit">
+            <button onclick="poAddAllContactEmails()" style="background:#fff;border:1px solid #ddd;border-radius:6px;padding:7px 12px;font-size:11px;cursor:pointer;font-weight:600">+ All Contacts</button>
+          </div>
+        </div>
+
+        <!-- Items table -->
+        <div style="overflow-y:auto;flex:1;padding:0 20px">
+          <table id="poItemsTable" style="width:100%;border-collapse:collapse;font-size:12px">
+            <thead style="position:sticky;top:0;background:#fff;border-bottom:1px solid #eee;z-index:1">
+              <tr>
+                <th style="text-align:left;padding:10px 8px;font-size:10px;text-transform:uppercase;letter-spacing:.04em;color:#888;font-weight:700">Strain &amp; Product</th>
+                <th style="text-align:right;padding:10px 8px;font-size:10px;text-transform:uppercase;letter-spacing:.04em;color:#888;font-weight:700;width:80px">Qty</th>
+                <th style="text-align:right;padding:10px 8px;font-size:10px;text-transform:uppercase;letter-spacing:.04em;color:#888;font-weight:700;width:80px">In Stock</th>
+                <th style="text-align:right;padding:10px 8px;font-size:10px;text-transform:uppercase;letter-spacing:.04em;color:#888;font-weight:700;width:96px">Unit $</th>
+                <th style="text-align:right;padding:10px 8px;font-size:10px;text-transform:uppercase;letter-spacing:.04em;color:#888;font-weight:700;width:96px">Line $</th>
+                <th style="text-align:left;padding:10px 8px;font-size:10px;text-transform:uppercase;letter-spacing:.04em;color:#888;font-weight:700;width:160px">Why Suggested</th>
+                <th style="width:30px"></th>
+              </tr>
+            </thead>
+            <tbody id="poItemsBody"></tbody>
+          </table>
+        </div>
+
+        <!-- Add row + totals + send -->
+        <div style="border-top:1px solid #eee;padding:12px 20px;background:#fafaf9;flex-shrink:0">
+          <div style="display:flex;gap:8px;margin-bottom:10px;align-items:center">
+            <input list="poAddItemList" id="poAddItemInput" placeholder="+ Add product or strain…" style="flex:1;padding:7px 10px;border:1px solid #ddd;border-radius:6px;font-size:12px;font-family:inherit" onkeypress="if(event.key==='Enter'){event.preventDefault();poAddItem();}">
+            <datalist id="poAddItemList"></datalist>
+            <button onclick="poAddItem()" style="background:#1a1a1a;color:#fff;border:none;border-radius:6px;padding:7px 14px;font-size:11px;font-weight:600;cursor:pointer">+ Add Line</button>
+          </div>
+          <div style="display:flex;justify-content:space-between;align-items:center">
+            <div id="poTotalLine" style="font-size:13px;color:#333"><strong>Total: $0</strong></div>
+            <div style="display:flex;gap:8px">
+              <button onclick="closeSuggestPO()" style="background:#fff;color:#666;border:1px solid #ddd;border-radius:7px;padding:9px 14px;font-size:12px;font-weight:600;cursor:pointer">Cancel</button>
+              <button onclick="poPreviewEmail()" id="poPreviewBtn" style="background:#fff;color:#333;border:1px solid #ddd;border-radius:7px;padding:9px 14px;font-size:12px;font-weight:600;cursor:pointer">Preview Email</button>
+              <button onclick="poSendEmail()" id="poSendBtn" style="background:#C8102E;color:#fff;border:none;border-radius:7px;padding:9px 18px;font-size:12px;font-weight:700;cursor:pointer">Send Purchase Order</button>
+            </div>
+          </div>
+          <div id="poStatus" style="margin-top:8px;font-size:11px;color:#999;min-height:14px"></div>
         </div>
       </div>
     </div>
@@ -5632,6 +5707,15 @@ function openAccount(name, skipHistory) {
   // Build main grid
   let grid = '';
 
+  // ── Action bar (Suggest PO + future actions) ──
+  grid += '<div class="acct-grid-full" style="display:flex;gap:8px;margin-bottom:4px;flex-wrap:wrap">'
+    + '<button onclick="openSuggestPO(\''+name.replace(/'/g,"\\'")+'\')" '
+    +   'style="background:#C8102E;color:#fff;border:none;border-radius:7px;padding:8px 16px;font-size:12px;font-weight:700;cursor:pointer;font-family:\'DM Sans\',sans-serif;display:inline-flex;align-items:center;gap:6px" '
+    +   'title="Build a purchase order suggestion based on this account\'s recent buying patterns and current in-stock inventory">'
+    + '<span style="font-size:14px">📋</span> Suggest Purchase Order'
+    + '</button>'
+    + '</div>';
+
   // ════════════════════════════════════════════════════════════════════════
   //  ACCOUNT DETAIL GRID — ordered by criticality:
   //    1) Upcoming Tasks  (open by default)
@@ -6158,6 +6242,575 @@ function toggleOrderDetailRow(rowId) {
   if (chevron) chevron.textContent = isOpen ? '▸' : '▾';
 }
 
+// ============================================================================
+//  SUGGEST PURCHASE ORDER
+//  Algorithm:
+//    1. Walk OPPS_DATA filtered to this account, last 90 days
+//    2. Aggregate line items by (strain + size bucket) — bucket = 3.5g / 14g
+//       / 28g / 1g joint / 2pk joint / 10pk joint / vape / infused
+//    3. Per group: count orders, sum units, compute median qty per order
+//    4. For each suggested (strain, size) — look up CURRENT_INV_DATA to find
+//       an in-stock match. If exact size match found: suggest with that batch.
+//       If different size of same strain available: substitute with note.
+//       If no version of strain in stock: omit (won't suggest something we can't fill)
+//    5. Pull unit price from PRICES default ladder (3.5g $10, 28g $60, etc.)
+//    6. Cap each suggested qty at availableInStock
+//    7. Sort suggestions by descending recent revenue from this account
+// ============================================================================
+
+// Default unit prices for PO calculations (matches portal config)
+var PO_DEFAULT_PRICES = {
+  '3.5g': 10.00,
+  '7g':   20.00,
+  '14g':  33.33,
+  '28g':  60.00,
+  '1g':   2.00,
+  '2pk':  2.50,
+  '10pk': 6.25,
+  'vape': 18.00,
+  'infused': 4.00
+};
+
+// Classify a product string into a size bucket. Returns a key from PO_DEFAULT_PRICES,
+// or 'other' if unclassifiable.
+function poClassifySize(productStr) {
+  var p = String(productStr || '').toLowerCase();
+  if (/infused/.test(p))                               return 'infused';
+  if (/vape|cart/.test(p))                             return 'vape';
+  if (/10\s*pk|10pk|10-pk|5\.0\s*gram/.test(p))        return '10pk';
+  if (/2\s*pk|2pk|2-pk/.test(p))                       return '2pk';
+  if (/01\.0\s*gram|1\s*gram\s*joint|preroll|single/.test(p)) return '1g';
+  if (/14\.0\s*gram|14g|micro/.test(p))                return '14g';
+  if (/28\.0\s*gram|28g|ounce/.test(p))                return '28g';
+  if (/07\.0\s*gram|7g\b/.test(p))                     return '7g';
+  if (/03\.5\s*gram|3\.5g|flower/.test(p))             return '3.5g';
+  return 'other';
+}
+
+function poSizeLabel(sizeKey) {
+  return ({
+    '3.5g': '3.5g Flower',
+    '7g':   '7g Flower',
+    '14g':  '14g Micro Bud',
+    '28g':  '28g Flower',
+    '1g':   '1g Joint',
+    '2pk':  '2pk Joints',
+    '10pk': '10pk Joints',
+    'vape': 'Vape Cart',
+    'infused': 'Infused Preroll',
+    'other': 'Other'
+  })[sizeKey] || sizeKey;
+}
+
+// Build inventory lookup: { strainLower → { sizeKey → totalUnitsAvailable } }
+function poBuildInventoryLookup() {
+  var lookup = {};
+  (window.CURRENT_INV_DATA || []).forEach(function(r) {
+    var strain = String(r.strain || '').toLowerCase().trim();
+    if (!strain) return;
+    var qty = (r.unitsForSale || 0) - (r.unitsOnHold || 0) - (r.unitsAllocated || 0);
+    if (qty <= 0) return;
+    var size = poClassifySize(r.product || r.productLine || '');
+    if (!lookup[strain]) lookup[strain] = {};
+    lookup[strain][size] = (lookup[strain][size] || 0) + qty;
+  });
+  return lookup;
+}
+
+// Internal state for the open PO modal
+window._poState = null;
+
+function openSuggestPO(accountName) {
+  if (!accountName) return;
+  window._poState = {
+    account: accountName,
+    items: [],     // [{ strain, sizeKey, qty, unitPrice, available, basis, substitute }]
+    sent: false
+  };
+
+  // Pre-fill recipients with primary contacts
+  var contacts = (typeof getContactsForAccount === 'function') ? getContactsForAccount(accountName) : [];
+  var emails = [];
+  contacts.forEach(function(c) {
+    if (c.email && emails.indexOf(c.email) < 0) emails.push(c.email);
+  });
+  document.getElementById('poRecipients').value = emails.join(', ');
+  document.getElementById('poAcctLabel').textContent = accountName;
+  document.getElementById('poStatus').textContent = '';
+
+  // Build suggestions
+  var suggestions = poBuildSuggestions(accountName);
+  window._poState.items = suggestions;
+
+  poRenderItems();
+  poRefreshAddItemList();
+
+  document.getElementById('suggestPOModal').style.display = 'flex';
+}
+
+function closeSuggestPO() {
+  document.getElementById('suggestPOModal').style.display = 'none';
+  window._poState = null;
+}
+
+// Build the suggestion list for an account.
+function poBuildSuggestions(accountName) {
+  var cutoff = new Date();
+  cutoff.setDate(cutoff.getDate() - 90);
+  var cutoffStr = cutoff.toISOString().slice(0, 10);
+
+  // Walk OPPS_DATA for this account, last 90d, line items
+  // groupKey = strain|sizeKey  →  { strain, sizeKey, qtys[], orderCount, totalRevenue, lastDate }
+  var groups = {};
+  if (typeof OPPS_DATA !== 'undefined' && Array.isArray(OPPS_DATA)) {
+    OPPS_DATA.forEach(function(o) {
+      if (o.a !== accountName) return;
+      var d = o.sd || o.d || '';
+      if (!d || d < cutoffStr) return;
+      (o.lineItems || []).forEach(function(li) {
+        if (li.sample) return;
+        var strain = String(li.strain || '').trim();
+        if (!strain) return;
+        var size = poClassifySize(li.product || '');
+        if (size === 'other') return;
+        var k = strain.toLowerCase() + '|' + size;
+        if (!groups[k]) groups[k] = {
+          strain: strain, sizeKey: size, qtys: [], orderCount: 0, totalRevenue: 0, lastDate: ''
+        };
+        groups[k].qtys.push(li.units || 0);
+        groups[k].orderCount++;
+        groups[k].totalRevenue += (li.amount || 0);
+        if (d > groups[k].lastDate) groups[k].lastDate = d;
+      });
+    });
+  }
+
+  // Median helper
+  function median(arr) {
+    if (!arr.length) return 0;
+    var s = arr.slice().sort(function(a,b){return a-b;});
+    var mid = Math.floor(s.length / 2);
+    return s.length % 2 ? s[mid] : Math.round((s[mid-1] + s[mid]) / 2);
+  }
+
+  var invLookup = poBuildInventoryLookup();
+
+  // Build candidate items
+  var items = [];
+  Object.keys(groups).forEach(function(k) {
+    var g = groups[k];
+    var strainLower = g.strain.toLowerCase();
+    var medianQty = median(g.qtys);
+    if (medianQty <= 0) return;
+
+    var available = 0;
+    var substituteNote = '';
+
+    // Try exact match first
+    if (invLookup[strainLower] && invLookup[strainLower][g.sizeKey]) {
+      available = invLookup[strainLower][g.sizeKey];
+    } else if (invLookup[strainLower]) {
+      // Same strain, different size — substitute with the largest-available alternate size
+      var altSizes = Object.keys(invLookup[strainLower]);
+      if (altSizes.length > 0) {
+        var bestAlt = altSizes.reduce(function(a, b) {
+          return invLookup[strainLower][b] > invLookup[strainLower][a] ? b : a;
+        });
+        available = invLookup[strainLower][bestAlt];
+        substituteNote = 'Substituted: ordered ' + poSizeLabel(g.sizeKey) + ', only ' + poSizeLabel(bestAlt) + ' in stock';
+        g.sizeKey = bestAlt;
+      }
+    }
+
+    if (available <= 0) return;  // skip — nothing to ship
+
+    // Cap suggested qty at available stock
+    var suggestQty = Math.min(medianQty, available);
+
+    items.push({
+      strain: g.strain,
+      sizeKey: g.sizeKey,
+      qty: suggestQty,
+      unitPrice: PO_DEFAULT_PRICES[g.sizeKey] || 0,
+      available: available,
+      orderCount: g.orderCount,
+      medianQty: medianQty,
+      lastDate: g.lastDate,
+      revenue: g.totalRevenue,
+      substitute: substituteNote
+    });
+  });
+
+  // Sort by 90-day revenue desc — most important items first
+  items.sort(function(a, b) { return b.revenue - a.revenue; });
+
+  return items;
+}
+
+function poRenderItems() {
+  var st = window._poState;
+  if (!st) return;
+  var body = document.getElementById('poItemsBody');
+  if (!body) return;
+
+  if (st.items.length === 0) {
+    body.innerHTML = '<tr><td colspan="7" style="text-align:center;padding:24px;color:#999;font-size:12px">'
+      + 'No suggestions — this account has no orders in the last 90 days, or no in-stock strains match.</td></tr>';
+    document.getElementById('poMetaLine').textContent = '0 suggested items · No order activity in the last 90 days';
+    document.getElementById('poTotalLine').innerHTML = '<strong>Total: $0</strong>';
+    return;
+  }
+
+  var rowsHtml = st.items.map(function(it, idx) {
+    var lineTotal = (it.qty || 0) * (it.unitPrice || 0);
+    var basisText = it.basis === 'manual'
+      ? '<em style="color:#999">Manually added</em>'
+      : 'Ordered ' + it.orderCount + 'x in 90d · last ' + (it.lastDate ? new Date(it.lastDate+'T12:00').toLocaleDateString('en-US',{month:'short',day:'numeric'}) : '—') + ' · med qty ' + it.medianQty;
+    var subWarn = it.substitute ? '<div style="font-size:10px;color:#a65a00;margin-top:2px;font-style:italic">⚠ ' + it.substitute + '</div>' : '';
+    var availColor = it.qty > it.available ? '#a00' : '#666';
+
+    return '<tr style="border-bottom:1px solid #f0f0f0">'
+      + '<td style="padding:8px 8px">'
+      +   '<div style="font-weight:600;color:#1a1a1a">' + escH(it.strain) + '</div>'
+      +   '<div style="font-size:11px;color:#888">' + escH(poSizeLabel(it.sizeKey)) + '</div>'
+      +   subWarn
+      + '</td>'
+      + '<td style="padding:8px 8px;text-align:right">'
+      +   '<input type="number" min="0" max="' + it.available + '" value="' + it.qty + '" '
+      +   'onchange="poUpdateQty(' + idx + ', this.value)" '
+      +   'style="width:64px;padding:5px 6px;border:1px solid #ddd;border-radius:5px;font-size:12px;text-align:right;font-family:inherit">'
+      + '</td>'
+      + '<td style="padding:8px 8px;text-align:right;color:' + availColor + ';font-variant-numeric:tabular-nums">' + it.available + '</td>'
+      + '<td style="padding:8px 8px;text-align:right">'
+      +   '<input type="number" min="0" step="0.01" value="' + it.unitPrice.toFixed(2) + '" '
+      +   'onchange="poUpdatePrice(' + idx + ', this.value)" '
+      +   'style="width:76px;padding:5px 6px;border:1px solid #ddd;border-radius:5px;font-size:12px;text-align:right;font-family:inherit">'
+      + '</td>'
+      + '<td style="padding:8px 8px;text-align:right;font-weight:700;color:#16A34A;font-variant-numeric:tabular-nums">$' + lineTotal.toFixed(2) + '</td>'
+      + '<td style="padding:8px 8px;font-size:10.5px;color:#666;line-height:1.4">' + basisText + '</td>'
+      + '<td style="padding:8px 8px;text-align:center">'
+      +   '<span onclick="poRemoveItem(' + idx + ')" style="cursor:pointer;color:#bbb;font-size:14px" title="Remove">×</span>'
+      + '</td>'
+      + '</tr>';
+  }).join('');
+  body.innerHTML = rowsHtml;
+
+  // Update totals + meta
+  var total = st.items.reduce(function(s, it) { return s + (it.qty || 0) * (it.unitPrice || 0); }, 0);
+  var totalUnits = st.items.reduce(function(s, it) { return s + (it.qty || 0); }, 0);
+  document.getElementById('poMetaLine').textContent = st.items.length + ' suggested items · ' + totalUnits + ' total units · sourced from 90-day order history';
+  document.getElementById('poTotalLine').innerHTML = '<strong>Total: $' + total.toFixed(2) + '</strong>';
+}
+
+function poUpdateQty(idx, val) {
+  if (!window._poState) return;
+  var q = parseInt(val) || 0;
+  window._poState.items[idx].qty = Math.max(0, q);
+  poRenderItems();
+}
+
+function poUpdatePrice(idx, val) {
+  if (!window._poState) return;
+  var p = parseFloat(val) || 0;
+  window._poState.items[idx].unitPrice = Math.max(0, p);
+  poRenderItems();
+}
+
+function poRemoveItem(idx) {
+  if (!window._poState) return;
+  window._poState.items.splice(idx, 1);
+  poRenderItems();
+}
+
+function poRefreshAddItemList() {
+  var dl = document.getElementById('poAddItemList');
+  if (!dl) return;
+  // List in-stock strains × sizes
+  var invLookup = poBuildInventoryLookup();
+  var options = [];
+  Object.keys(invLookup).sort().forEach(function(strainLower) {
+    Object.keys(invLookup[strainLower]).forEach(function(sizeKey) {
+      var qty = invLookup[strainLower][sizeKey];
+      if (qty <= 0) return;
+      // Recover proper-case strain from the raw inventory
+      var strainProper = strainLower;
+      var match = (window.CURRENT_INV_DATA || []).find(function(r) {
+        return String(r.strain || '').toLowerCase().trim() === strainLower;
+      });
+      if (match && match.strain) strainProper = match.strain.trim();
+      options.push(strainProper + ' — ' + poSizeLabel(sizeKey) + ' (' + qty + ' avail)');
+    });
+  });
+  dl.innerHTML = options.map(function(o) { return '<option value="' + escapeAttr(o) + '">'; }).join('');
+}
+
+function poAddItem() {
+  if (!window._poState) return;
+  var input = document.getElementById('poAddItemInput');
+  var v = (input.value || '').trim();
+  if (!v) return;
+
+  // Parse "Strain Name — Size Label (Qty avail)" or just "Strain — Size"
+  var m = v.match(/^(.+?)\s+[—-]\s+(.+?)(?:\s+\((\d+)\s+avail\))?$/);
+  if (!m) {
+    document.getElementById('poStatus').textContent = 'Pick from the dropdown — format is "Strain — Size"';
+    return;
+  }
+  var strain = m[1].trim();
+  var sizeLabel = m[2].trim();
+  // Map sizeLabel back to sizeKey
+  var sizeKey = null;
+  Object.keys(PO_DEFAULT_PRICES).forEach(function(k) {
+    if (poSizeLabel(k) === sizeLabel) sizeKey = k;
+  });
+  if (!sizeKey) {
+    document.getElementById('poStatus').textContent = 'Unrecognized size — pick from the dropdown';
+    return;
+  }
+
+  // Look up available stock
+  var invLookup = poBuildInventoryLookup();
+  var available = (invLookup[strain.toLowerCase()] || {})[sizeKey] || 0;
+  if (available <= 0) {
+    document.getElementById('poStatus').textContent = 'Not in stock — can\'t add';
+    return;
+  }
+
+  window._poState.items.push({
+    strain: strain,
+    sizeKey: sizeKey,
+    qty: 1,
+    unitPrice: PO_DEFAULT_PRICES[sizeKey] || 0,
+    available: available,
+    orderCount: 0,
+    medianQty: 0,
+    lastDate: '',
+    revenue: 0,
+    substitute: '',
+    basis: 'manual'
+  });
+  input.value = '';
+  document.getElementById('poStatus').textContent = '';
+  poRenderItems();
+}
+
+function poAddAllContactEmails() {
+  if (!window._poState) return;
+  var contacts = (typeof getContactsForAccount === 'function') ? getContactsForAccount(window._poState.account) : [];
+  var emails = [];
+  contacts.forEach(function(c) {
+    if (c.email && emails.indexOf(c.email) < 0) emails.push(c.email);
+  });
+  document.getElementById('poRecipients').value = emails.join(', ');
+}
+
+// Build HTML body for the PO email — same visual language as share-inventory email
+function poBuildEmailHTML() {
+  var st = window._poState;
+  if (!st || !st.items.length) return '';
+  var today = new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
+  var total = st.items.reduce(function(s, it) { return s + (it.qty || 0) * (it.unitPrice || 0); }, 0);
+  var totalUnits = st.items.reduce(function(s, it) { return s + (it.qty || 0); }, 0);
+
+  // Group by sizeKey for clean sections
+  var bySize = {};
+  st.items.forEach(function(it) {
+    if (!bySize[it.sizeKey]) bySize[it.sizeKey] = [];
+    bySize[it.sizeKey].push(it);
+  });
+  var sizeOrder = ['3.5g', '7g', '14g', '28g', '1g', '2pk', '10pk', 'vape', 'infused'];
+
+  var h = '<!DOCTYPE html><html><body style="margin:0;padding:0;background:#f5f5f5;font-family:-apple-system,BlinkMacSystemFont,\'Segoe UI\',sans-serif">';
+  h += '<table width="100%" cellpadding="0" cellspacing="0" style="background:#f5f5f5;padding:20px 0">';
+  h += '<tr><td align="center">';
+  h += '<table width="600" cellpadding="0" cellspacing="0" style="background:#fff;border:1px solid #e8e8e8;border-radius:6px;max-width:600px">';
+
+  // Header
+  h += '<tr><td style="padding:24px 24px 8px 24px;border-bottom:1px solid #f0f0f0">';
+  h += '<div style="font-size:11px;color:#C8102E;font-weight:700;letter-spacing:1.5px;text-transform:uppercase">Redbird Cannabis</div>';
+  h += '<div style="font-size:22px;font-weight:700;color:#111;margin-top:4px">Purchase Order Proposal</div>';
+  h += '<div style="font-size:12px;color:#888;margin-top:4px">For <strong>' + escH(st.account) + '</strong> · ' + escH(today) + '</div>';
+  h += '</td></tr>';
+
+  // Intro
+  h += '<tr><td style="padding:16px 24px;color:#444;font-size:13px;line-height:1.55">';
+  h += '<p style="margin:0">Based on your recent ordering history, we\'ve put together a suggested order for you. Everything below is currently in stock and ready to ship. Reply with any adjustments or send back as-is to confirm.</p>';
+  h += '</td></tr>';
+
+  // Items by section
+  sizeOrder.forEach(function(sk) {
+    if (!bySize[sk]) return;
+    h += '<tr><td style="padding:8px 24px;background:#fafafa;border-top:1px solid #e8e8e8;border-bottom:1px solid #e8e8e8">';
+    h += '<div style="font-size:11px;font-weight:700;letter-spacing:0.5px;color:#111;text-transform:uppercase">' + escH(poSizeLabel(sk)) + '</div>';
+    h += '</td></tr>';
+    h += '<tr><td style="padding:0 24px">';
+    h += '<table width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse">';
+    h += '<tr style="border-bottom:1px solid #f0f0f0">';
+    h += '<td style="padding:8px 0;font-size:10px;font-weight:700;color:#999;text-transform:uppercase;letter-spacing:0.04em">Strain</td>';
+    h += '<td style="padding:8px 0;font-size:10px;font-weight:700;color:#999;text-transform:uppercase;letter-spacing:0.04em;text-align:right">Qty</td>';
+    h += '<td style="padding:8px 0;font-size:10px;font-weight:700;color:#999;text-transform:uppercase;letter-spacing:0.04em;text-align:right">Unit</td>';
+    h += '<td style="padding:8px 0;font-size:10px;font-weight:700;color:#999;text-transform:uppercase;letter-spacing:0.04em;text-align:right">Line</td>';
+    h += '</tr>';
+    bySize[sk].forEach(function(it) {
+      var lt = (it.qty || 0) * (it.unitPrice || 0);
+      h += '<tr style="border-bottom:1px solid #f5f5f5">';
+      h += '<td style="padding:9px 0;font-size:13px;font-weight:600;color:#111">' + escH(it.strain) + '</td>';
+      h += '<td style="padding:9px 0;font-size:13px;color:#333;text-align:right">' + it.qty + '</td>';
+      h += '<td style="padding:9px 0;font-size:13px;color:#666;text-align:right">$' + it.unitPrice.toFixed(2) + '</td>';
+      h += '<td style="padding:9px 0;font-size:13px;font-weight:700;color:#16A34A;text-align:right">$' + lt.toFixed(2) + '</td>';
+      h += '</tr>';
+    });
+    h += '</table>';
+    h += '</td></tr>';
+  });
+
+  // Total
+  h += '<tr><td style="padding:16px 24px;background:#fafafa;border-top:2px solid #111">';
+  h += '<table width="100%"><tr>';
+  h += '<td style="font-size:13px;font-weight:600;color:#555">Total · ' + totalUnits + ' units across ' + st.items.length + ' SKUs</td>';
+  h += '<td style="font-size:18px;font-weight:700;color:#111;text-align:right">$' + total.toFixed(2) + '</td>';
+  h += '</tr></table>';
+  h += '</td></tr>';
+
+  // Footer
+  h += '<tr><td style="padding:16px 24px;font-size:11px;color:#888;line-height:1.5">';
+  h += 'This is a proposed order based on your last 90 days of activity. Reply to adjust quantities, swap strains, or confirm to place the order. — Redbird Cannabis';
+  h += '</td></tr>';
+
+  h += '</table>';
+  h += '</td></tr></table>';
+  h += '</body></html>';
+  return h;
+}
+
+function poPreviewEmail() {
+  var html = poBuildEmailHTML();
+  if (!html) {
+    document.getElementById('poStatus').textContent = 'Add at least one item before previewing';
+    return;
+  }
+  var w = window.open('', '_blank', 'width=720,height=820');
+  if (!w) {
+    document.getElementById('poStatus').textContent = 'Popup blocked — allow popups to preview';
+    return;
+  }
+  w.document.write(html);
+  w.document.close();
+}
+
+function poSendEmail() {
+  var st = window._poState;
+  if (!st || !st.items.length) {
+    document.getElementById('poStatus').textContent = 'Add at least one item';
+    return;
+  }
+  var recipientsStr = (document.getElementById('poRecipients').value || '').trim();
+  if (!recipientsStr) {
+    document.getElementById('poStatus').textContent = 'Add at least one recipient';
+    return;
+  }
+  var emails = recipientsStr.split(',').map(function(e){return e.trim();}).filter(function(e){return e && e.indexOf('@')>0;});
+  if (!emails.length) {
+    document.getElementById('poStatus').textContent = 'No valid email addresses';
+    return;
+  }
+
+  if (!gmailToken) {
+    initGmailAuth(function() { poSendEmail(); });
+    return;
+  }
+
+  var html = poBuildEmailHTML();
+  var subject = 'Purchase Order Proposal — Redbird Cannabis — ' + new Date().toLocaleDateString('en-US', {month:'long', day:'numeric', year:'numeric'});
+  var sendBtn = document.getElementById('poSendBtn');
+  sendBtn.disabled = true;
+
+  var sent = 0;
+  var failures = [];
+
+  function sendNext(i) {
+    if (i >= emails.length) {
+      sendBtn.disabled = false;
+      sendBtn.textContent = 'Send Purchase Order';
+      if (failures.length === 0) {
+        document.getElementById('poStatus').innerHTML = '<span style="color:#16A34A;font-weight:700">✓ Sent to all ' + sent + ' recipients</span>';
+        // Log to activity
+        try { poLogToActivity(st.account, sent, html); } catch(e){}
+        setTimeout(closeSuggestPO, 1800);
+      } else {
+        document.getElementById('poStatus').innerHTML = '<span style="color:#a00">Sent to ' + sent + ' of ' + emails.length + '. Failed: ' + failures.join(', ') + '</span>';
+      }
+      return;
+    }
+    sendBtn.textContent = 'Sending ' + (i+1) + '/' + emails.length + '…';
+    var email = emails[i];
+    var boundary = 'rb_po_' + Date.now() + '_' + i;
+    var mime = ['To: '+email,'Subject: '+mimeEncodeSubject(subject),'MIME-Version: 1.0','Content-Type: multipart/alternative; boundary="'+boundary+'"','','--'+boundary,'Content-Type: text/plain; charset=utf-8','Content-Transfer-Encoding: 7bit','','Redbird Cannabis — '+subject,'','--'+boundary,'Content-Type: text/html; charset=utf-8','Content-Transfer-Encoding: 7bit','',html,'','--'+boundary+'--',''].join('\r\n');
+    var encoded;
+    try {
+      encoded = btoa(unescape(encodeURIComponent(mime))).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'');
+    } catch (e) {
+      failures.push(email + ' (encoding)');
+      setTimeout(function(){ sendNext(i+1); }, 100);
+      return;
+    }
+    fetch('https://gmail.googleapis.com/gmail/v1/users/me/messages/send', {
+      method: 'POST',
+      headers: {'Authorization':'Bearer '+gmailToken,'Content-Type':'application/json'},
+      body: JSON.stringify({raw: encoded})
+    }).then(function(r){
+      return r.text().then(function(txt){
+        var p = null; try { p = JSON.parse(txt); } catch(e){}
+        return { status: r.status, ok: r.ok, body: p };
+      });
+    }).then(function(res){
+      if (res.status === 401) {
+        gmailToken = null;
+        initGmailAuth(function() { sendNext(i); });
+        return;
+      }
+      if (res.ok && res.body && res.body.id) {
+        sent++;
+      } else {
+        failures.push(email);
+      }
+      setTimeout(function(){ sendNext(i+1); }, 1000);
+    }).catch(function(){
+      failures.push(email + ' (network)');
+      setTimeout(function(){ sendNext(i+1); }, 1000);
+    });
+  }
+  sendNext(0);
+}
+
+// Log a PO send to Activity Log so we have audit trail
+function poLogToActivity(account, recipCount, html) {
+  var st = window._poState;
+  if (!st) return;
+  var total = st.items.reduce(function(s,it){return s+(it.qty||0)*(it.unitPrice||0);}, 0);
+  var totalUnits = st.items.reduce(function(s,it){return s+(it.qty||0);}, 0);
+  var note = 'Purchase Order Proposal sent to ' + recipCount + ' recipient(s). '
+    + st.items.length + ' SKUs · ' + totalUnits + ' units · $' + total.toFixed(2) + ' total.';
+
+  if (!ACTIVITY_LOG_URL || ACTIVITY_LOG_URL === 'YOUR_APPS_SCRIPT_WEB_APP_URL_HERE') return;
+  var cbName = 'rb_po_log_cb_' + Date.now();
+  window[cbName] = function(data) {
+    delete window[cbName];
+    var tag = document.getElementById(cbName);
+    if (tag && tag.parentNode) tag.parentNode.removeChild(tag);
+  };
+  var script = document.createElement('script');
+  script.id = cbName;
+  script.src = ACTIVITY_LOG_URL
+    + '?action=log'
+    + '&account=' + encodeURIComponent(account)
+    + '&type=email'
+    + '&notes='   + encodeURIComponent(note)
+    + '&user='    + encodeURIComponent(typeof CRM_USER !== 'undefined' ? CRM_USER : 'Unknown')
+    + '&callback='+ cbName;
+  document.body.appendChild(script);
+}
+
 function renderAccountsList() {
   const q = (document.getElementById('acctSearch')||{}).value || '';
   const sortBy = (document.getElementById('acctSort')||{}).value || 'rank';
@@ -6419,16 +7072,16 @@ function renderAccountsList() {
       + '<table class="al-table">'
       + '<thead><tr>'
       + '<th class="al-tcol-rank">#</th>'
-      + '<th>Account</th>'
-      + '<th>Street</th>'
-      + '<th>City</th>'
-      + '<th>ST</th>'
-      + '<th style="text-align:right">Rev (200d)</th>'
-      + '<th>Trend</th>'
-      + '<th>Last Order</th>'
-      + '<th style="text-align:right">Orders</th>'
-      + '<th style="text-align:center">Contacts</th>'
-      + '<th></th>'
+      + '<th class="al-tcol-name">Account</th>'
+      + '<th class="al-tcol-addr">Street</th>'
+      + '<th class="al-tcol-city">City</th>'
+      + '<th class="al-tcol-state">ST</th>'
+      + '<th class="al-tcol-rev" style="text-align:right">Rev (200d)</th>'
+      + '<th class="al-tcol-trend">Trend</th>'
+      + '<th class="al-tcol-last">Last Order</th>'
+      + '<th class="al-tcol-orders" style="text-align:right">Orders</th>'
+      + '<th class="al-tcol-contacts" style="text-align:center">Contacts</th>'
+      + '<th class="al-tcol-arrow"></th>'
       + '</tr></thead>'
       + '<tbody>'+tableRows+'</tbody>'
       + '</table>'
