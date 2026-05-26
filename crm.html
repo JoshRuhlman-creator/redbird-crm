@@ -2458,6 +2458,9 @@ select option { background: var(--surface-2); }
       <!-- Sales Reports (existing) -->
       <div id="rptSalesWrap">
 
+      <!-- Revenue Forecast (NEW) — populated by renderForecastSection() -->
+      <div id="rptForecastWrap"></div>
+
       <!-- New / Lost Accounts by Month -->
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px">
         <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:16px">
@@ -10540,6 +10543,419 @@ function toggleVarianceDetail(wk) {
 
 function renderPipeline() { renderReports(); }
 
+// ═══════════════════════════════════════════════════════════════════════════
+// CADENCE-BASED REVENUE FORECAST
+//
+// Predicts forward revenue from each account's historical ordering cadence.
+// Zero manual input from sales team required — everything derives from
+// OPPS_DATA. See sketch doc for the model description.
+//
+// Pipeline:
+//   1) _fcst_getOrderEvents(opps)         — clean event list (dedupe, filter)
+//   2) _fcst_buildAccountModels(events)   — per-account cadence + AOV
+//   3) _fcst_predictHorizon(models, D)    — total $ forecast for D days out
+//   4) _fcst_topExpected(models, D, n)    — ranked top-N expected orders
+//   5) _fcst_atRisk(models)               — accounts past their cadence
+//   6) _fcst_backtest(events, weeks)      — predicted vs actual past N weeks
+// ═══════════════════════════════════════════════════════════════════════════
+
+var FORECAST_MODEL = null;       // Cached model — invalidated on OPPS refresh
+var FORECAST_BACKTEST = null;    // Cached backtest results
+
+// Pull clean order events. Dedupe by order# (one event per order across stages),
+// exclude samples, exclude Preorder (not a commitment), require a date and rev.
+function _fcst_getOrderEvents(opps) {
+  if (!Array.isArray(opps)) return [];
+  var byOrder = {};
+  opps.forEach(function(o) {
+    if (!o || o.isSample) return;
+    if (/preorder/i.test(o.s || '')) return;
+    if (!o.n || !o.a) return;
+    var dateStr = String(o.sd || o.d || o.dd || '').slice(0,10);
+    if (!dateStr || !/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) return;
+    var rev = parseFloat(o.r) || 0;
+    if (rev <= 0) return;
+    // If multiple stages of same order# exist, prefer the one with highest rev
+    var existing = byOrder[o.n];
+    if (!existing || rev > existing.rev) {
+      byOrder[o.n] = { n: o.n, a: o.a, date: dateStr, rev: rev, s: o.s };
+    }
+  });
+  return Object.keys(byOrder).map(function(k){ return byOrder[k]; });
+}
+
+// Weighted quantile from a list of {days, weight} pairs
+function _fcst_weightedQuantile(intervals, q) {
+  if (!intervals || !intervals.length) return null;
+  var sorted = intervals.slice().sort(function(a,b){ return a.days - b.days; });
+  var totalW = 0;
+  sorted.forEach(function(x){ totalW += x.weight; });
+  if (totalW <= 0) return null;
+  var cumW = 0;
+  for (var i = 0; i < sorted.length; i++) {
+    cumW += sorted[i].weight;
+    if (cumW / totalW >= q) return sorted[i].days;
+  }
+  return sorted[sorted.length-1].days;
+}
+
+// Build per-account model: cadence median/sigma, AOV, days-since-last-order.
+// asOfDate (Date) lets backtest "stand" at a past date to evaluate forecasts.
+function _fcst_buildAccountModels(events, asOfDate) {
+  var now = asOfDate instanceof Date ? asOfDate : new Date();
+  var nowStr = now.toISOString().slice(0,10);
+
+  // Group events by account
+  var byAccount = {};
+  events.forEach(function(e) {
+    if (!byAccount[e.a]) byAccount[e.a] = [];
+    byAccount[e.a].push(e);
+  });
+
+  // Cadence window: last 12 months from "now"
+  var cutoff = new Date(now);
+  cutoff.setMonth(cutoff.getMonth() - 12);
+  var cutoffStr = cutoff.toISOString().slice(0,10);
+
+  var models = {};
+  Object.keys(byAccount).forEach(function(account) {
+    var all = byAccount[account]
+      .filter(function(e){ return e.date <= nowStr; })  // ignore future events (backtest)
+      .sort(function(a,b){ return a.date < b.date ? -1 : 1; });
+    var recent = all.filter(function(e){ return e.date >= cutoffStr; });
+
+    if (recent.length < 2) {
+      models[account] = {
+        account: account, orderCount: recent.length, intervals: [],
+        medianInterval: null, sigma: null, aov: recent.length ? recent[0].rev : 0,
+        lastOrder: recent.length ? recent[recent.length-1].date : null,
+        daysSinceLastOrder: null, isActive: false
+      };
+      return;
+    }
+
+    // Inter-order intervals with recency weighting (0.95^months_ago)
+    var intervals = [];
+    for (var i = 1; i < recent.length; i++) {
+      var d1 = new Date(recent[i-1].date + 'T12:00');
+      var d2 = new Date(recent[i].date + 'T12:00');
+      var diff = Math.round((d2 - d1) / 86400000);
+      if (diff > 0 && diff < 365) {
+        var monthsAgo = Math.max(0, (now - d2) / (86400000 * 30));
+        intervals.push({ days: diff, weight: Math.pow(0.95, monthsAgo) });
+      }
+    }
+
+    var medianInterval = _fcst_weightedQuantile(intervals, 0.5);
+    var q25 = _fcst_weightedQuantile(intervals, 0.25);
+    var q75 = _fcst_weightedQuantile(intervals, 0.75);
+    var sigma = (q25 != null && q75 != null) ? (q75 - q25) / 1.35 : null;
+
+    // Weighted AOV from last 6 orders
+    var recentForAOV = recent.slice(-6);
+    var totalW = 0, weightedSum = 0;
+    recentForAOV.forEach(function(e) {
+      var monthsAgo = Math.max(0, (now - new Date(e.date + 'T12:00')) / (86400000 * 30));
+      var w = Math.pow(0.95, monthsAgo);
+      totalW += w; weightedSum += e.rev * w;
+    });
+    var aov = totalW > 0 ? weightedSum / totalW : 0;
+
+    var lastOrder = recent[recent.length-1].date;
+    var daysSince = Math.round((now - new Date(lastOrder + 'T12:00')) / 86400000);
+    var isActive = daysSince <= 120;
+
+    models[account] = {
+      account: account, orderCount: recent.length,
+      intervals: intervals, medianInterval: medianInterval, sigma: sigma,
+      aov: aov, lastOrder: lastOrder, daysSinceLastOrder: daysSince,
+      isActive: isActive
+    };
+  });
+
+  return models;
+}
+
+// Empirical hazard: P(order in next D days | gone t days without order)
+// = (weighted count of intervals in [t, t+D]) / (weighted count of intervals >= t)
+function _fcst_probOrderWithin(model, D) {
+  if (!model.intervals || !model.intervals.length || !model.isActive) return 0;
+  if (model.daysSinceLastOrder == null) return 0;
+  var t = model.daysSinceLastOrder;
+  var numerW = 0, denomW = 0;
+  model.intervals.forEach(function(iv) {
+    if (iv.days >= t) denomW += iv.weight;
+    if (iv.days >= t && iv.days <= t + D) numerW += iv.weight;
+  });
+  if (denomW <= 0) {
+    // All historical intervals are shorter than current gap — likely churning
+    // Return a tiny tail probability scaled by horizon
+    return Math.min(0.05 * (D / 30), 0.1);
+  }
+  return numerW / denomW;
+}
+
+// Aggregate forecast across all accounts for D-day horizon
+function _fcst_predictHorizon(models, D) {
+  var totalRev = 0, totalVar = 0, contribAccts = 0;
+  Object.keys(models).forEach(function(k) {
+    var m = models[k];
+    if (!m.isActive) return;
+    var p = _fcst_probOrderWithin(m, D);
+    var contribution = p * m.aov;
+    totalRev += contribution;
+    totalVar += m.aov * m.aov * p * (1 - p);  // Bernoulli variance
+    if (p > 0.01) contribAccts++;
+  });
+  var band = 1.28 * Math.sqrt(totalVar);  // 80% confidence
+  return { forecast: totalRev, band: band, accountCount: contribAccts };
+}
+
+// Rank accounts by expected revenue contribution in next D days
+function _fcst_topExpected(models, D, limit) {
+  D = D || 7; limit = limit || 25;
+  var nowStr = new Date().toISOString().slice(0,10);
+  var ranked = [];
+  Object.keys(models).forEach(function(k) {
+    var m = models[k];
+    if (!m.isActive) return;
+    var p = _fcst_probOrderWithin(m, D);
+    if (p < 0.05) return;
+
+    var predDate = null, isOverdue = false;
+    if (m.medianInterval && m.lastOrder) {
+      var d = new Date(m.lastOrder + 'T12:00');
+      d.setDate(d.getDate() + m.medianInterval);
+      predDate = d.toISOString().slice(0,10);
+      isOverdue = predDate < nowStr;
+    }
+    ranked.push({
+      account: m.account, lastOrder: m.lastOrder,
+      daysSinceLastOrder: m.daysSinceLastOrder, medianInterval: m.medianInterval,
+      predictedDate: predDate, isOverdue: isOverdue,
+      probability: p, aov: m.aov, expectedRev: p * m.aov
+    });
+  });
+  ranked.sort(function(a,b){ return b.expectedRev - a.expectedRev; });
+  return ranked.slice(0, limit);
+}
+
+// Accounts past their expected cadence by more than max(7d, 1σ)
+function _fcst_atRisk(models) {
+  var atRisk = [];
+  Object.keys(models).forEach(function(k) {
+    var m = models[k];
+    if (!m.isActive || !m.medianInterval || m.daysSinceLastOrder == null) return;
+    var slack = Math.max(7, m.sigma || 7);
+    if (m.daysSinceLastOrder > m.medianInterval + slack) {
+      atRisk.push({
+        account: m.account, lastOrder: m.lastOrder,
+        daysSinceLastOrder: m.daysSinceLastOrder,
+        medianInterval: m.medianInterval,
+        overdueBy: m.daysSinceLastOrder - m.medianInterval,
+        aov: m.aov
+      });
+    }
+  });
+  atRisk.sort(function(a,b){ return b.aov - a.aov; });
+  return atRisk;
+}
+
+// Backtest: walk back 8 weeks; for each week, train model on data BEFORE the
+// week starts, forecast that 7-day window, compare to actual revenue in it.
+// Note: intervals are computed from the truncated event set, so this is a
+// proper out-of-sample backtest (no future leakage).
+function _fcst_backtest(events, weeksBack) {
+  weeksBack = weeksBack || 8;
+  var results = [];
+  for (var w = weeksBack - 1; w >= 0; w--) {
+    var weekStart = new Date();
+    weekStart.setHours(0,0,0,0);
+    weekStart.setDate(weekStart.getDate() - ((w+1) * 7));
+    var weekEnd = new Date(weekStart);
+    weekEnd.setDate(weekEnd.getDate() + 7);
+
+    var weekStartStr = weekStart.toISOString().slice(0,10);
+    var weekEndStr = weekEnd.toISOString().slice(0,10);
+
+    var trainEvents = events.filter(function(e){ return e.date < weekStartStr; });
+    var trainModels = _fcst_buildAccountModels(trainEvents, weekStart);
+    var prediction = _fcst_predictHorizon(trainModels, 7);
+
+    var actual = events
+      .filter(function(e){ return e.date >= weekStartStr && e.date < weekEndStr; })
+      .reduce(function(s,e){ return s + e.rev; }, 0);
+
+    results.push({
+      weekStart: weekStartStr, weekEnd: weekEndStr,
+      predicted: prediction.forecast, actual: actual, band: prediction.band
+    });
+  }
+  return results;
+}
+
+// Build & cache full forecast model. Invalidate when OPPS_DATA refreshes.
+function buildForecastModel() {
+  var t0 = Date.now();
+  var events = _fcst_getOrderEvents(window.OPPS_DATA);
+  var models = _fcst_buildAccountModels(events);
+  FORECAST_MODEL = {
+    builtAt: Date.now(),
+    eventCount: events.length,
+    accountCount: Object.keys(models).length,
+    activeAccountCount: Object.keys(models).filter(function(k){ return models[k].isActive; }).length,
+    models: models,
+    horizons: {
+      d7:  _fcst_predictHorizon(models, 7),
+      d14: _fcst_predictHorizon(models, 14),
+      d30: _fcst_predictHorizon(models, 30),
+      d60: _fcst_predictHorizon(models, 60)
+    },
+    topExpected: _fcst_topExpected(models, 7, 20),
+    atRisk: _fcst_atRisk(models)
+  };
+  FORECAST_BACKTEST = _fcst_backtest(events, 8);
+  console.log('[Forecast] Built in ' + (Date.now() - t0) + 'ms — ' +
+    FORECAST_MODEL.activeAccountCount + ' active accounts, ' +
+    events.length + ' events');
+  return FORECAST_MODEL;
+}
+
+// ───────────────────────────────────────────────────────────────────────────
+// FORECAST UI — renders into #rptForecastWrap inside the Reports page
+// ───────────────────────────────────────────────────────────────────────────
+function renderForecastSection() {
+  var wrap = document.getElementById('rptForecastWrap');
+  if (!wrap) return;
+  if (!window.OPPS_DATA || !window.OPPS_DATA.length) {
+    wrap.innerHTML = '<div style="padding:24px;text-align:center;color:var(--text-faint);font-size:12px">Loading order data…</div>';
+    return;
+  }
+  if (!FORECAST_MODEL) buildForecastModel();
+  var m = FORECAST_MODEL;
+  var bt = FORECAST_BACKTEST || [];
+
+  // ── KPI cards (4 horizons) ──
+  var fmt$ = function(n){ return '$' + Math.round(n).toLocaleString(); };
+  var fmt$k = function(n){
+    if (Math.abs(n) >= 1000) return '$' + (n/1000).toFixed(n >= 10000 ? 0 : 1) + 'k';
+    return '$' + Math.round(n);
+  };
+  var card = function(label, h) {
+    var pct = h.forecast > 0 ? Math.round(100 * h.band / h.forecast) : 0;
+    return '<div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:16px;flex:1;min-width:0">'
+      + '<div style="font-size:9px;font-weight:700;letter-spacing:1px;color:var(--text-faint);font-family:\'Space Mono\',monospace;margin-bottom:6px">' + label + '</div>'
+      + '<div style="font-size:24px;font-weight:700;color:var(--text);font-family:\'DM Sans\',sans-serif;line-height:1">' + fmt$k(h.forecast) + '</div>'
+      + '<div style="font-size:11px;color:var(--text-muted);margin-top:6px;font-family:\'Space Mono\',monospace">± ' + fmt$k(h.band) + ' <span style="color:var(--text-faint)">(±' + pct + '%)</span></div>'
+      + '<div style="font-size:11px;color:var(--text-faint);margin-top:2px;font-family:\'Space Mono\',monospace">' + h.accountCount + ' accts contributing</div>'
+      + '</div>';
+  };
+  var cardRow = '<div style="display:flex;gap:12px;margin-bottom:16px">'
+    + card('NEXT 7 DAYS',  m.horizons.d7)
+    + card('NEXT 14 DAYS', m.horizons.d14)
+    + card('NEXT 30 DAYS', m.horizons.d30)
+    + card('NEXT 60 DAYS', m.horizons.d60)
+    + '</div>';
+
+  // ── Backtest panel: predicted vs actual (last 8 weeks) ──
+  var maxVal = 0;
+  bt.forEach(function(r){ maxVal = Math.max(maxVal, r.predicted, r.actual); });
+  if (maxVal === 0) maxVal = 1;
+  var hitCount = 0;
+  var btRows = bt.map(function(r) {
+    var pctErr = r.actual > 0 ? Math.round(100 * Math.abs(r.predicted - r.actual) / r.actual) : 0;
+    var withinBand = Math.abs(r.predicted - r.actual) <= r.band * 1.2; // a bit of slack
+    if (withinBand) hitCount++;
+    var pBar = (r.predicted / maxVal) * 100;
+    var aBar = (r.actual / maxVal) * 100;
+    var label = new Date(r.weekStart + 'T12:00').toLocaleDateString('en-US', {month:'short',day:'numeric'});
+    return '<div style="display:flex;align-items:center;gap:10px;padding:5px 0;border-bottom:1px solid var(--border)">'
+      + '<div style="width:60px;font-size:11px;font-family:\'Space Mono\',monospace;color:var(--text-muted)">' + label + '</div>'
+      + '<div style="flex:1;display:flex;flex-direction:column;gap:3px;min-width:0">'
+        + '<div style="display:flex;align-items:center;gap:6px"><div style="width:34px;font-size:9.5px;color:var(--text-faint);font-family:\'Space Mono\',monospace">PRED</div><div style="flex:1;background:var(--surface-2);height:14px;border-radius:3px;overflow:hidden"><div style="background:#6c5ce7;height:100%;width:'+pBar+'%"></div></div><div style="width:64px;text-align:right;font-size:10.5px;font-family:\'Space Mono\',monospace">'+fmt$k(r.predicted)+'</div></div>'
+        + '<div style="display:flex;align-items:center;gap:6px"><div style="width:34px;font-size:9.5px;color:var(--text-faint);font-family:\'Space Mono\',monospace">ACT</div><div style="flex:1;background:var(--surface-2);height:14px;border-radius:3px;overflow:hidden"><div style="background:'+(withinBand?'#0f9d58':'#d93025')+';height:100%;width:'+aBar+'%"></div></div><div style="width:64px;text-align:right;font-size:10.5px;font-family:\'Space Mono\',monospace">'+fmt$k(r.actual)+'</div></div>'
+      + '</div>'
+      + '<div style="width:48px;text-align:right;font-size:10.5px;font-family:\'Space Mono\',monospace;color:'+(withinBand?'#0f9d58':'#d93025')+'">' + (r.actual ? (pctErr+'%') : '—') + '</div>'
+      + '</div>';
+  }).join('');
+  var btHdr = '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">'
+    + '<div style="font-size:10px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:var(--text-faint);font-family:\'Space Mono\',monospace">BACKTEST — LAST 8 WEEKS (out-of-sample)</div>'
+    + '<div style="font-size:11px;color:var(--text-muted);font-family:\'Space Mono\',monospace">Within band: <span style="color:'+(hitCount>=5?'#0f9d58':'#d93025')+';font-weight:700">'+hitCount+'/8</span></div>'
+    + '</div>';
+  var btPanel = '<div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:16px;margin-bottom:16px">'
+    + btHdr + btRows + '</div>';
+
+  // ── Top Expected Orders (next 7 days) ──
+  var topRows = m.topExpected.map(function(r) {
+    var predLabel = r.predictedDate
+      ? new Date(r.predictedDate + 'T12:00').toLocaleDateString('en-US',{month:'short',day:'numeric'})
+      : '—';
+    var probPct = Math.round(r.probability * 100);
+    var probColor = probPct >= 70 ? '#0f9d58' : probPct >= 45 ? '#f9ab00' : 'var(--text-muted)';
+    var safe = String(r.account).replace(/'/g,"\\'");
+    return '<tr style="border-bottom:1px solid var(--border)">'
+      + '<td style="padding:7px 10px;font-size:12px;font-weight:600;cursor:pointer" onclick="if(typeof openAcctPopover===\'function\')openAcctPopover(\''+escH(safe)+'\')">' + escH(r.account) + '</td>'
+      + '<td style="padding:7px 10px;font-size:11.5px;color:var(--text-muted);font-family:\'Space Mono\',monospace">' + new Date(r.lastOrder + 'T12:00').toLocaleDateString('en-US',{month:'short',day:'numeric'}) + '</td>'
+      + '<td style="padding:7px 10px;font-size:11.5px;color:var(--text-muted);font-family:\'Space Mono\',monospace">' + r.daysSinceLastOrder + 'd</td>'
+      + '<td style="padding:7px 10px;font-size:11.5px;color:var(--text-muted);font-family:\'Space Mono\',monospace">~' + r.medianInterval + 'd</td>'
+      + '<td style="padding:7px 10px;font-size:11.5px;font-family:\'Space Mono\',monospace">' + predLabel + (r.isOverdue ? ' <span style="color:#d93025">⚠</span>' : '') + '</td>'
+      + '<td style="padding:7px 10px;font-size:11.5px;font-weight:700;font-family:\'Space Mono\',monospace;color:'+probColor+'">' + probPct + '%</td>'
+      + '<td style="padding:7px 10px;font-size:12px;font-weight:700;text-align:right;font-family:\'Space Mono\',monospace">' + fmt$k(r.expectedRev) + '</td>'
+      + '</tr>';
+  }).join('');
+  var topPanel = '<div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:16px;margin-bottom:16px">'
+    + '<div style="font-size:10px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:var(--text-faint);font-family:\'Space Mono\',monospace;margin-bottom:10px">TOP EXPECTED ORDERS — NEXT 7 DAYS</div>'
+    + (topRows ? '<table style="width:100%;border-collapse:collapse">'
+        + '<thead><tr style="border-bottom:1.5px solid var(--border)">'
+          + '<th style="padding:6px 10px;text-align:left;font-size:9.5px;letter-spacing:0.8px;color:var(--text-faint);font-family:\'Space Mono\',monospace">ACCOUNT</th>'
+          + '<th style="padding:6px 10px;text-align:left;font-size:9.5px;letter-spacing:0.8px;color:var(--text-faint);font-family:\'Space Mono\',monospace">LAST ORDER</th>'
+          + '<th style="padding:6px 10px;text-align:left;font-size:9.5px;letter-spacing:0.8px;color:var(--text-faint);font-family:\'Space Mono\',monospace">DAYS SINCE</th>'
+          + '<th style="padding:6px 10px;text-align:left;font-size:9.5px;letter-spacing:0.8px;color:var(--text-faint);font-family:\'Space Mono\',monospace">CADENCE</th>'
+          + '<th style="padding:6px 10px;text-align:left;font-size:9.5px;letter-spacing:0.8px;color:var(--text-faint);font-family:\'Space Mono\',monospace">PREDICTED</th>'
+          + '<th style="padding:6px 10px;text-align:left;font-size:9.5px;letter-spacing:0.8px;color:var(--text-faint);font-family:\'Space Mono\',monospace">CONF</th>'
+          + '<th style="padding:6px 10px;text-align:right;font-size:9.5px;letter-spacing:0.8px;color:var(--text-faint);font-family:\'Space Mono\',monospace">EXPECTED $</th>'
+        + '</tr></thead><tbody>' + topRows + '</tbody></table>'
+        : '<div style="padding:16px 0;text-align:center;color:var(--text-faint);font-size:12px">No high-probability orders predicted for this week.</div>')
+    + '</div>';
+
+  // ── At-risk panel ──
+  var arRows = m.atRisk.slice(0, 15).map(function(r) {
+    var safe = String(r.account).replace(/'/g,"\\'");
+    return '<tr style="border-bottom:1px solid var(--border)">'
+      + '<td style="padding:7px 10px;font-size:12px;font-weight:600;cursor:pointer" onclick="if(typeof openAcctPopover===\'function\')openAcctPopover(\''+escH(safe)+'\')">' + escH(r.account) + '</td>'
+      + '<td style="padding:7px 10px;font-size:11.5px;color:var(--text-muted);font-family:\'Space Mono\',monospace">' + new Date(r.lastOrder + 'T12:00').toLocaleDateString('en-US',{month:'short',day:'numeric'}) + '</td>'
+      + '<td style="padding:7px 10px;font-size:11.5px;color:var(--text-muted);font-family:\'Space Mono\',monospace">' + r.daysSinceLastOrder + 'd</td>'
+      + '<td style="padding:7px 10px;font-size:11.5px;font-family:\'Space Mono\',monospace">~' + r.medianInterval + 'd</td>'
+      + '<td style="padding:7px 10px;font-size:11.5px;font-weight:700;color:#d93025;font-family:\'Space Mono\',monospace">+' + r.overdueBy + 'd</td>'
+      + '<td style="padding:7px 10px;font-size:12px;font-weight:700;text-align:right;font-family:\'Space Mono\',monospace">' + fmt$k(r.aov) + '</td>'
+      + '</tr>';
+  }).join('');
+  var arPanel = '<div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:16px;margin-bottom:16px">'
+    + '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">'
+      + '<div style="font-size:10px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:var(--text-faint);font-family:\'Space Mono\',monospace">AT-RISK — PAST EXPECTED CADENCE</div>'
+      + '<div style="font-size:11px;color:var(--text-muted);font-family:\'Space Mono\',monospace">' + m.atRisk.length + ' total · showing top ' + Math.min(15, m.atRisk.length) + ' by AOV</div>'
+    + '</div>'
+    + (arRows ? '<table style="width:100%;border-collapse:collapse">'
+        + '<thead><tr style="border-bottom:1.5px solid var(--border)">'
+          + '<th style="padding:6px 10px;text-align:left;font-size:9.5px;letter-spacing:0.8px;color:var(--text-faint);font-family:\'Space Mono\',monospace">ACCOUNT</th>'
+          + '<th style="padding:6px 10px;text-align:left;font-size:9.5px;letter-spacing:0.8px;color:var(--text-faint);font-family:\'Space Mono\',monospace">LAST ORDER</th>'
+          + '<th style="padding:6px 10px;text-align:left;font-size:9.5px;letter-spacing:0.8px;color:var(--text-faint);font-family:\'Space Mono\',monospace">DAYS SINCE</th>'
+          + '<th style="padding:6px 10px;text-align:left;font-size:9.5px;letter-spacing:0.8px;color:var(--text-faint);font-family:\'Space Mono\',monospace">CADENCE</th>'
+          + '<th style="padding:6px 10px;text-align:left;font-size:9.5px;letter-spacing:0.8px;color:var(--text-faint);font-family:\'Space Mono\',monospace">OVERDUE BY</th>'
+          + '<th style="padding:6px 10px;text-align:right;font-size:9.5px;letter-spacing:0.8px;color:var(--text-faint);font-family:\'Space Mono\',monospace">AOV</th>'
+        + '</tr></thead><tbody>' + arRows + '</tbody></table>'
+        : '<div style="padding:16px 0;text-align:center;color:var(--text-faint);font-size:12px">No accounts currently past their expected cadence.</div>')
+    + '</div>';
+
+  // ── Model meta (small footer line) ──
+  var meta = '<div style="font-size:10px;color:var(--text-faint);font-family:\'Space Mono\',monospace;text-align:right;margin-bottom:16px">'
+    + 'Model: ' + m.eventCount + ' events · ' + m.activeAccountCount + ' active accounts · ' + m.accountCount + ' total'
+    + '</div>';
+
+  wrap.innerHTML = '<div style="font-size:14px;font-weight:700;text-transform:uppercase;letter-spacing:1.2px;color:var(--text);font-family:\'Space Mono\',monospace;margin-bottom:12px;padding-bottom:8px;border-bottom:2px solid var(--text)">REVENUE FORECAST</div>'
+    + cardRow + btPanel + topPanel + arPanel + meta;
+}
+
 function renderReports() {
   var data = window.INVOICE_DATA;
   if (!data || !data.length) {
@@ -10990,6 +11406,12 @@ function renderReports() {
   // Pass the report-wide filter inputs so the breakdown can either inherit the
   // report range or apply its own independent period.
   renderAcctBreakdown(data, { cutoff: cutoff, famFilter: famFilter, acctFilter: acctFilter, activeAccounts: activeAccounts });
+
+  // ── Revenue Forecast (cadence-based, no manual inputs) ──
+  // Runs after the main render so it doesn't block the visible page. Cached
+  // model means subsequent renders are near-instant.
+  try { renderForecastSection(); }
+  catch (err) { console.warn('[Forecast] render failed:', err); }
 }
 
 
