@@ -5,7 +5,7 @@
  *  (feeds the CRM Projected tab, Share Projected emails, and the retailer portal)
  * ============================================================================
  *
- *  WHAT IT DOES (every hour, automatically)
+ *  WHAT IT DOES (every hour via syncAll(), automatically)
  *    1. Reads Product Allocation (Chris's sheet) and Propagation (Cultivation
  *       Overview) BY HEADER NAME. Columns can be moved or inserted in either
  *       sheet without breaking anything. If a required column disappears, the
@@ -31,12 +31,10 @@
  *       3+ hours (trigger deleted, auth expired, quota), it emails you.
  *
  *  INSTALL (one time)
- *    1. In the CRM Apps Script project: delete the old mirrorInventory()
- *       function (this file defines a new one with the same name).
- *    2. Add this file as a new script file (e.g. InventoryPipeline.gs). Save.
- *    3. Run  installInventoryPipeline()  once and approve the permissions.
- *       It installs the hourly sync and the watchdog, then runs a first sync.
- *    4. Check the "Pipeline Status" tab in the CRM Master sheet. It should say OK.
+ *    1. Run  installInventoryPipeline()  once and approve the permissions.
+ *       It confirms the hourly syncAll trigger, adds the watchdog, and runs
+ *       a first sync.
+ *    2. Check the "Pipeline Status" tab in the CRM Master sheet. It should say OK.
  *
  *  Everything in this file is self-contained. It does not depend on any other
  *  helper function in the project.
@@ -166,19 +164,31 @@ var PROP_FIELDS = {
 //  ENTRY POINTS
 // ============================================================================
 
-/** One-time setup: installs triggers and runs the first sync. Safe to re-run. */
+/**
+ * One-time setup. Safe to re-run.
+ *  - Makes sure the hourly syncAll() trigger exists (syncAll calls mirrorInventory)
+ *  - Removes any stray standalone mirrorInventory triggers (avoids double runs)
+ *  - Installs the 6-hour watchdog
+ *  - Runs a first sync and reports the result
+ */
 function installInventoryPipeline() {
-  var handlers = ['mirrorInventory', 'inventoryPipelineWatchdog'];
+  var hasSyncAll = false;
   ScriptApp.getProjectTriggers().forEach(function (t) {
-    if (handlers.indexOf(t.getHandlerFunction()) >= 0) ScriptApp.deleteTrigger(t);
+    var fn = t.getHandlerFunction();
+    if (fn === 'mirrorInventory' || fn === 'inventoryPipelineWatchdog') ScriptApp.deleteTrigger(t);
+    else if (fn === 'syncAll') {
+      if (hasSyncAll) ScriptApp.deleteTrigger(t);   // keep exactly one
+      hasSyncAll = true;
+    }
   });
-  ScriptApp.newTrigger('mirrorInventory').timeBased().everyHours(1).create();
+  if (!hasSyncAll) ScriptApp.newTrigger('syncAll').timeBased().everyHours(1).create();
   ScriptApp.newTrigger('inventoryPipelineWatchdog').timeBased().everyHours(6).create();
   var result = mirrorInventory();
-  Logger.log('Installed hourly sync + 6-hour watchdog. First run: ' + JSON.stringify(result));
+  Logger.log('Hourly syncAll trigger ' + (hasSyncAll ? 'already present' : 'created') +
+             '; 6-hour watchdog installed. First run: ' + JSON.stringify(result));
 }
 
-/** Hourly sync. Same name as before, so anything already calling it keeps working. */
+/** Hourly sync. Called by syncAll() every hour. Same name as before, so anything already calling it keeps working. */
 function mirrorInventory() {
   var lock = LockService.getScriptLock();
   if (!lock.tryLock(60 * 1000)) {
@@ -206,10 +216,11 @@ function inventoryPipelineWatchdog() {
   var last = Number(props.getProperty('INV_LAST_SUCCESS') || 0);
   var hours = last ? (Date.now() - last) / 36e5 : Infinity;
   var hasHourly = ScriptApp.getProjectTriggers().some(function (t) {
-    return t.getHandlerFunction() === 'mirrorInventory';
+    var fn = t.getHandlerFunction();
+    return fn === 'syncAll' || fn === 'mirrorInventory';
   });
   var problems = [];
-  if (!hasHourly) problems.push('The hourly mirrorInventory trigger is missing. Run installInventoryPipeline() to restore it.');
+  if (!hasHourly) problems.push('The hourly syncAll trigger is missing. Run installInventoryPipeline() to restore it.');
   if (hours > INV_PIPELINE.STALE_HOURS) {
     problems.push('No successful inventory sync in ' + (isFinite(hours) ? hours.toFixed(1) + ' hours' : 'ever') +
                   '. The CRM Projected tab and the retailer portal are showing stale projections.');
