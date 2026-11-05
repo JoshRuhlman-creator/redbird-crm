@@ -637,33 +637,81 @@ function weekItemCount(weekId) {
   return count;
 }
 
+// ── RELIABLE FETCH ──
+// Every data call goes through here: hard timeout, automatic retries with
+// backoff, and HTTP/API errors are surfaced as errors (a 403/429/500 from
+// Google returns JSON without `values`, which used to look like "no data").
+function fetchJson(url, opts) {
+  opts = opts || {};
+  var timeoutMs = opts.timeout || 15000;
+  var retries = opts.retries == null ? 2 : opts.retries;
+  var attempt = 0;
+  function once() {
+    var ctrl = typeof AbortController !== 'undefined' ? new AbortController() : null;
+    var timer = setTimeout(function() { if (ctrl) ctrl.abort(); }, timeoutMs);
+    return fetch(url, ctrl ? { signal: ctrl.signal, cache: 'no-store' } : { cache: 'no-store' })
+      .then(function(r) {
+        return r.json().catch(function() { return {}; }).then(function(j) {
+          if (!r.ok || (j && j.error)) {
+            var e = new Error((j && j.error && j.error.message) || ('HTTP ' + r.status));
+            e.status = r.status;
+            throw e;
+          }
+          return j;
+        });
+      })
+      .finally(function() { clearTimeout(timer); });
+  }
+  function run() {
+    return once().catch(function(err) {
+      // Don't retry permanent errors (bad key / missing tab); do retry timeouts, 429, 5xx, network
+      var permanent = err.status && err.status >= 400 && err.status < 500 && err.status !== 429 && err.status !== 408;
+      if (permanent || attempt >= retries) throw err;
+      attempt++;
+      return new Promise(function(res) { setTimeout(res, 800 * Math.pow(2, attempt - 1)); }).then(run);
+    });
+  }
+  return run();
+}
+
+function sheetsUrl(sheetId, range) {
+  return 'https://sheets.googleapis.com/v4/spreadsheets/' + sheetId
+    + '/values/' + encodeURIComponent(range)
+    + '?key=' + SHEETS_API_KEY + '&valueRenderOption=FORMATTED_VALUE';
+}
+
+function showPortalLoadError() {
+  document.getElementById('week-list').innerHTML =
+    '<div class="loading" style="color:#D2232A;line-height:1.6">'
+    + 'We couldn\'t load upcoming inventory right now.<br>'
+    + '<span style="color:#888;font-size:12px">This is usually a brief connection issue. Your account is fine.</span><br>'
+    + '<button onclick="retryPortalLoad()" style="margin-top:12px;padding:10px 22px;background:#D2232A;color:#fff;border:none;border-radius:8px;font-weight:700;cursor:pointer;font-family:inherit">Try again</button>'
+    + '</div>';
+}
+
+function retryPortalLoad() {
+  document.getElementById('week-list').innerHTML = '<div class="loading"><div class="spinner"></div>Loading inventory data...</div>';
+  loadPortalData();
+}
+
 // ── LOAD LIVE DATA ──
 async function loadPortalData() {
   try {
-    // Load inventory projections (raw — same as CRM)
-    var invUrl = 'https://sheets.googleapis.com/v4/spreadsheets/' + CRM_SHEET_ID
-      + '/values/' + encodeURIComponent('Inventory Projections Mirror')
-      + '?key=' + SHEETS_API_KEY + '&valueRenderOption=FORMATTED_VALUE';
-    var invRes = await fetch(invUrl);
-    var invJson = await invRes.json();
-    var invRaw = invJson.values || [];
-
-    // Load orders for presold data
-    var ordUrl = 'https://sheets.googleapis.com/v4/spreadsheets/' + CRM_SHEET_ID
-      + '/values/' + encodeURIComponent('OrdersLog')
-      + '?key=' + SHEETS_API_KEY + '&valueRenderOption=FORMATTED_VALUE';
-    var ordRes = await fetch(ordUrl);
-    var ordJson = await ordRes.json();
+    // Inventory projections + open orders load in parallel. Both are
+    // required: without OrdersLog we would overstate what's available.
+    var results = await Promise.all([
+      fetchJson(sheetsUrl(CRM_SHEET_ID, 'Inventory Projections Mirror')),
+      fetchJson(sheetsUrl(CRM_SHEET_ID, 'OrdersLog'))
+    ]);
+    var invRaw = results[0].values || [];
+    var ordJson = results[1];
     var ordHeaders = (ordJson.values || [])[0] || [];
     var ordRows = (ordJson.values || []).slice(1);
 
-    // Load genetics for strain types (Sativa/Indica/Hybrid)
+    // Load genetics for strain types (Sativa/Indica/Hybrid) — optional
     var GENETICS_SHEET_ID = '1GCvS1EK8u6YmyKaZEIWA7omUSlZsapktEjjIcWDEL1g';
     try {
-      var genUrl = 'https://sheets.googleapis.com/v4/spreadsheets/' + GENETICS_SHEET_ID
-        + '/values/Genetics!A:E?key=' + SHEETS_API_KEY + '&valueRenderOption=FORMATTED_VALUE';
-      var genRes = await fetch(genUrl);
-      var genJson = await genRes.json();
+      var genJson = await fetchJson(sheetsUrl(GENETICS_SHEET_ID, 'Genetics!A:E'), { timeout: 8000, retries: 1 });
       var genRows = (genJson.values || []).slice(1); // skip header
       window.STRAIN_TYPES = {};
       genRows.forEach(function(r) {
@@ -701,7 +749,7 @@ async function loadPortalData() {
     updateCartBadge();
   } catch (err) {
     console.error('Portal data load error:', err);
-    document.getElementById('week-list').innerHTML = '<div class="loading" style="color:#D2232A">Failed to load inventory data. Please try again.</div>';
+    showPortalLoadError();
   }
 }
 
@@ -2017,6 +2065,11 @@ document.getElementById('topbar-date').textContent = new Date().toLocaleDateStri
       } else {
         // Lookup failed — show the email gate so they can recover.
         showEmailGate();
+        var errEl = document.getElementById('lookup-error');
+        if (errEl) {
+          errEl.textContent = 'We couldn\'t open your account link. Enter your email below to continue.';
+          errEl.style.display = 'block';
+        }
       }
     });
     return;
@@ -2108,45 +2161,52 @@ function lookupEmail() {
   }
 
   // Look up email in Contacts tab
-  var contactsUrl = 'https://sheets.googleapis.com/v4/spreadsheets/' + CRM_SHEET_ID
-    + '/values/' + encodeURIComponent('Contacts') + '?key=' + SHEETS_API_KEY + '&valueRenderOption=FORMATTED_VALUE';
-
-  fetch(contactsUrl).then(function(r) { return r.json(); }).then(function(d) {
+  fetchJson(sheetsUrl(CRM_SHEET_ID, 'Contacts')).then(function(d) {
     var rows = d.values || [];
-    if (rows.length < 2) {
-      loadingEl.style.display = 'none';
-      errorEl.textContent = 'Could not load contact data. Please try again.';
-      errorEl.style.display = 'block';
-      return;
+    if (rows.length < 2) throw new Error('Contacts tab returned no rows');
+
+    // Find columns by name. Accepts current and past header names so a
+    // rename in the CRM ("Account Name" → "Trade Name") can't lock buyers out.
+    var headers = rows[0].map(function(h) { return String(h || '').trim().toLowerCase().replace(/[^a-z]/g, ''); });
+    function col(names) {
+      for (var n = 0; n < names.length; n++) { var i = headers.indexOf(names[n]); if (i >= 0) return i; }
+      return -1;
+    }
+    var emailCol = col(['email', 'emailaddress', 'contactemail']);
+    var acctCol  = col(['tradename', 'accountname', 'account', 'store', 'storename', 'company']);
+    var firstCol = col(['firstname', 'first']);
+    var lastCol  = col(['lastname', 'last']);
+    if (emailCol < 0 || acctCol < 0) {
+      throw new Error('Contacts tab is missing an Email or Trade Name column');
     }
 
-    var headers = rows[0];
-    var emailCol = headers.findIndex(function(h) { return /email/i.test(h); });
-    var acctCol = headers.findIndex(function(h) { return /account.name/i.test(h); });
-    var firstCol = headers.findIndex(function(h) { return /first.name/i.test(h); });
-    var lastCol = headers.findIndex(function(h) { return /last.name/i.test(h); });
-
-    var match = null;
+    // Collect every store this email buys for (multi-store buyers get the switcher)
+    var match = null, stores = [];
     for (var i = 1; i < rows.length; i++) {
-      var rowEmail = (rows[i][emailCol] || '').trim().toLowerCase();
-      if (rowEmail === email) {
+      var rowEmails = String(rows[i][emailCol] || '').toLowerCase().split(/[;,\s]+/);
+      if (rowEmails.indexOf(email) < 0) continue;
+      var store = String(rows[i][acctCol] || '').trim();
+      if (!store) continue;
+      if (!match) {
         match = {
-          email: rowEmail,
-          account: (rows[i][acctCol] || '').trim(),
-          firstName: (rows[i][firstCol] || '').trim(),
-          lastName: (rows[i][lastCol] || '').trim()
+          email: email,
+          account: store,
+          firstName: firstCol >= 0 ? String(rows[i][firstCol] || '').trim() : '',
+          lastName: lastCol >= 0 ? String(rows[i][lastCol] || '').trim() : ''
         };
-        break;
       }
+      if (stores.indexOf(store) < 0) stores.push(store);
     }
 
     loadingEl.style.display = 'none';
 
-    if (!match || !match.account) {
-      errorEl.textContent = 'No account found for this email. Please contact your Redbird Cannabis sales rep.';
+    if (!match) {
+      errorEl.textContent = 'We don\'t have ' + email + ' on file yet. Please contact your Redbird Cannabis sales rep and they\'ll add you.';
       errorEl.style.display = 'block';
       return;
     }
+
+    AVAILABLE_ACCOUNTS = stores.map(function(s, idx) { return { tradeName: s, isPrimary: idx === 0 }; });
 
     // Set the contact data and load portal
     ACCT_PARAM = match.account;
@@ -2173,8 +2233,9 @@ function lookupEmail() {
     loadPortalData();
 
   }).catch(function(err) {
+    console.error('[Portal] Account lookup failed:', err);
     loadingEl.style.display = 'none';
-    errorEl.textContent = 'Error looking up account: ' + err.message;
+    errorEl.textContent = 'We couldn\'t reach our system just now. Please try again in a moment. If it keeps happening, contact your Redbird sales rep.';
     errorEl.style.display = 'block';
   });
 }

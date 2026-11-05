@@ -3515,7 +3515,44 @@ var CRM_USER = '';
 var currentNav='all', currentView='list', calYear=today.getFullYear(), calMonth=today.getMonth(), calDay=today.getDate();
 var filterPending=true, filterDone=true, backPage='queue';
 
-
+// ── Inventory pipeline health (written hourly by the Apps Script inventory pipeline) ──
+// Shows a small pill next to the Projected subtitle: green = fresh, amber = warnings
+// or getting old, red = failed / stale. Hover for details. Cached for 5 minutes.
+var _invPipelineStatus = null, _invPipelineFetchedAt = 0;
+function renderInvPipelinePill() {
+  var pill = document.getElementById('invPipelinePill');
+  if (!pill) return;
+  function paint(s) {
+    if (!s) { pill.style.display = 'none'; return; }
+    var last = s['Last Success'] ? new Date(s['Last Success']) : null;
+    var ageH = last && !isNaN(last) ? (Date.now() - last.getTime()) / 36e5 : Infinity;
+    var status = s['Status'] || '';
+    var color, label;
+    if (status === 'ERROR' || ageH > 3) { color = ['#FEE2E2', '#B91C1C']; label = ageH > 3 ? 'Projections stale' : 'Sync failed'; }
+    else if (status === 'WARN' || ageH > 1.5) { color = ['#FEF3C7', '#92400E']; label = 'Synced · needs attention'; }
+    else { color = ['#DCFCE7', '#166534']; label = 'Synced'; }
+    if (isFinite(ageH)) label += ' ' + (ageH < 1 ? Math.max(1, Math.round(ageH * 60)) + 'm ago' : Math.round(ageH) + 'h ago');
+    pill.style.background = color[0]; pill.style.color = color[1]; pill.style.display = 'inline-block';
+    pill.textContent = label;
+    pill.title = ['Status: ' + status,
+      'Last success: ' + (s['Last Success'] || 'never'),
+      'Harvest weeks: ' + (s['Harvest Weeks'] || 0) + ' (Product Allocation ' + (s['Product Allocation Rows'] || 0) + ' rows, Propagation ' + (s['Propagation Rows'] || 0) + ' rows)',
+      'Deliveries through: ' + (s['Furthest Delivery'] || 'n/a'),
+      'Yields: ' + (s['Yield Rates'] || ''),
+      s['Errors'] ? 'Errors: ' + s['Errors'] : '',
+      s['Warnings'] ? 'Warnings: ' + s['Warnings'] : ''].filter(Boolean).join('\n');
+  }
+  if (_invPipelineStatus && Date.now() - _invPipelineFetchedAt < 5 * 60 * 1000) { paint(_invPipelineStatus); return; }
+  var url = 'https://sheets.googleapis.com/v4/spreadsheets/1Nrz05Rr8B1-5-2HXIXByy_pL6TH9U6wz-HUgu9LSkjw/values/'
+    + encodeURIComponent('Pipeline Status') + '?key=AIzaSyCiX_mltG3QDz8q6Sx77yQnltMSup7Ik8o&valueRenderOption=FORMATTED_VALUE';
+  fetch(url, { cache: 'no-store' }).then(function(r) { return r.json(); }).then(function(d) {
+    var s = {};
+    (d.values || []).slice(1).forEach(function(row) { if (row[0]) s[row[0]] = row[1] || ''; });
+    _invPipelineStatus = Object.keys(s).length ? s : null;
+    _invPipelineFetchedAt = Date.now();
+    paint(_invPipelineStatus);
+  }).catch(function() { pill.style.display = 'none'; });
+}
 
 function renderInventory() {
   var q = ((document.getElementById('invSearch')||{}).value||'').toLowerCase();
@@ -3667,7 +3704,14 @@ function renderInventory() {
   var gross10pk = tot10pk + ded10pk;
 
   var sub = document.getElementById('invPageSub');
-  if(sub) sub.textContent = filtered.length + ' batches across ' + weeks + ' weeks' + (totalDeducted > 0 ? ' · ' + totalDeducted + ' units reserved by pending orders' : '');
+  if(sub) {
+    sub.textContent = filtered.length + ' batches across ' + weeks + ' weeks' + (totalDeducted > 0 ? ' · ' + totalDeducted + ' units reserved by pending orders' : '');
+    var pill = document.createElement('span');
+    pill.id = 'invPipelinePill';
+    pill.style.cssText = 'margin-left:10px;font-size:11px;padding:2px 8px;border-radius:10px;cursor:help;display:none';
+    sub.appendChild(pill);
+    renderInvPipelinePill();
+  }
 
   var totValue = filtered.filter(function(r){return !(r.inf>0)}).reduce(function(s,r){
     return s + r.p35*10 + (r.pm||0)*33.33 + (r.j1||0)*2 + (r.j2||0)*2.50 + (r.j10||0)*10;
