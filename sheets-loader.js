@@ -1355,6 +1355,15 @@ function buildOrderCoverage(opps) {
   const today = new Date().toISOString().slice(0, 10);
   const stuckCutoff = new Date(Date.now() - STUCK_DAYS * 864e5).toISOString().slice(0, 10);
   const days = new Set(), months = {};
+  // Cultivera is the system of record from its earliest order onward. A
+  // Salesforce-only order dated inside that span never became a Cultivera
+  // order (a placeholder PO / preorder), so it isn't flagged as stuck.
+  let cultiveraFrom = '';
+  opps.forEach(o => {
+    if (o._source !== 'Cultivera') return;
+    const dt = (o.dd || o.d || o.sd || '').slice(0, 10);
+    if (dt && (!cultiveraFrom || dt < cultiveraFrom)) cultiveraFrom = dt;
+  });
   opps.forEach(o => {
     const dt = (o.dd || o.d || o.sd || '').slice(0, 10);
     if (!dt || dt < FROM || dt > today) return;
@@ -1367,7 +1376,7 @@ function buildOrderCoverage(opps) {
     if (fulfilled && !(o.lineItems || []).length && (o.r || 0) > 0) mm.unitemizedRev += o.r;
     // Only real numbered orders. Named Salesforce entries like "Mar PO" are
     // standing monthly POs whose deliveries are separate numbered orders.
-    if (!fulfilled && /^ORD-/.test(o._key || '') && dt < stuckCutoff && (o.r || 0) > 0 && !/sampl|cancel|lost|void/i.test(o.s || '')) {
+    if (!fulfilled && /^ORD-/.test(o._key || '') && !(o._source !== 'Cultivera' && cultiveraFrom && dt >= cultiveraFrom) && dt < stuckCutoff && (o.r || 0) > 0 && !/sampl|cancel|lost|void/i.test(o.s || '')) {
       mm.stuck++; mm.stuckRev += o.r;
       if (o._source === 'Cultivera') mm.stuckLive++;
     }
@@ -1388,7 +1397,7 @@ function buildOrderCoverage(opps) {
     const stale = Math.round((new Date(today + 'T12:00') - new Date(lastDay + 'T12:00')) / 864e5);
     if (stale > GAP_DAYS) gaps.push({ from: lastDay, to: today, days: stale, open: true });
   }
-  return { gaps, months, gapDays: GAP_DAYS, stuckDays: STUCK_DAYS, sources: window.ORDER_SOURCE_STATS || null };
+  return { gaps, months, cultiveraFrom, gapDays: GAP_DAYS, stuckDays: STUCK_DAYS, sources: window.ORDER_SOURCE_STATS || null };
 }
 
 function parseHistoricalOpps(rows) {
