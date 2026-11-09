@@ -1521,6 +1521,45 @@ function inventoryPipelineWatchdog() {
   if (problems.length) {
     _invSendAlert('WATCHDOG', 'Inventory sync has stopped', problems, []);
   }
+  _checkCultiveraOrderSync();
+}
+
+/**
+ * Cultivera → OrdersLog sync (runs on the redbird-sync VM, 4x/day).
+ * crossreference.js records every run on the "Cultivera Sync Status" tab.
+ * Alerts when a run was BLOCKED / FAILED (it refused to overwrite history),
+ * when a write was interrupted, or when no run has succeeded in 8+ hours
+ * (VM stopped, billing lapsed, cron broken, Cultivera login failing).
+ * Same problem emails at most every 12 hours.
+ */
+function _checkCultiveraOrderSync() {
+  var sh = SpreadsheetApp.openById(INV_PIPELINE.CRM_SHEET_ID).getSheetByName('Cultivera Sync Status');
+  if (!sh) return;   // not installed yet
+  var s = {};
+  sh.getRange(1, 1, Math.max(1, sh.getLastRow()), 2).getValues().forEach(function (r) { if (r[0]) s[r[0]] = r[1]; });
+  var problems = [];
+  var status = String(s['Status'] || '');
+  if (status && status !== 'OK') problems.push('Last run was ' + status + ': ' + (s['Message'] || '(no message)'));
+  var last = s['Last Success'] ? new Date(s['Last Success']) : null;
+  var hours = last && !isNaN(last) ? (Date.now() - last.getTime()) / 36e5 : Infinity;
+  if (hours > 8) {
+    problems.push('No successful Cultivera order sync in ' + (isFinite(hours) ? hours.toFixed(1) + ' hours' : 'ever') +
+      '. Check that the redbird-sync VM (us-west1-a) is running and GCP billing is active. New orders are not reaching the CRM or Reports.');
+  }
+  var props = PropertiesService.getScriptProperties();
+  if (!problems.length) {
+    if (props.getProperty('CULT_ALERTING') === '1') {
+      _invSendAlert('RESOLVED', 'Cultivera order sync is healthy again', ['Last success: ' + s['Last Success'] + '. ' + (s['Message'] || '')], []);
+      props.deleteProperty('CULT_ALERTING'); props.deleteProperty('CULT_ALERT_SIG');
+    }
+    return;
+  }
+  var sig = problems.join('|').replace(/[\d.]+ hours/, 'N hours');
+  if (sig === props.getProperty('CULT_ALERT_SIG') && Date.now() - Number(props.getProperty('CULT_ALERT_AT') || 0) < INV_PIPELINE.ALERT_REPEAT_HOURS * 36e5) return;
+  _invSendAlert('ERROR', 'Cultivera order sync needs attention', problems, []);
+  props.setProperty('CULT_ALERT_SIG', sig);
+  props.setProperty('CULT_ALERT_AT', String(Date.now()));
+  props.setProperty('CULT_ALERTING', '1');
 }
 
 // ============================================================================
