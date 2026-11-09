@@ -25,6 +25,7 @@ const SHEETS_CONFIG = {
     inventory:   'Inventory Projections Mirror',
     currentInv:  'Inventory',
     historyOpps: 'opportunities w/products',
+    orderHistory: 'Order History',            // Salesforce order-level report (totals, through May 2026)
     tasks:       'tasks',
     invoices:    'invoicedetails',
     retailerSales: 'RetailerSales',
@@ -399,6 +400,8 @@ function parseOrders(rows) {
       orderMap[orderNum] = {
         a:   r['Client'] || '',
         n:   orderNum,
+        _key: orderKey(orderNum),
+        _source: 'Cultivera',
         r:   0,                                // will accumulate
         s:   stage,
         dm:  r['Assigned To'] || '',
@@ -1239,6 +1242,155 @@ function buildPipelineData(opps) {
 // → Merged into OPPS_DATA using same shorthand format
 // ─────────────────────────────────────────────
 
+// ─────────────────────────────────────────────
+// ORDER IDENTITY (shared by every order source)
+// Cultivera numbers orders "ORD - 39898"; Salesforce stored the same number
+// as the Opportunity Name ("39898"). Normalizing to the digits lets the
+// three sources (OrdersLog, Salesforce line items, Salesforce Order History)
+// be merged without double counting. Non-numeric Salesforce names ("Mar PO",
+// "Credit") are reused across stores, so those are keyed by account + name +
+// date instead of name alone.
+// ─────────────────────────────────────────────
+function orderKey(name, account, date) {
+  const m = String(name || '').trim().match(/^(?:ORD\s*-?\s*)?(\d{4,7})$/i);
+  if (m) return 'ORD-' + m[1];
+  return 'SF|' + String(account || '').trim().toLowerCase() + '|' + String(name || '').trim().toLowerCase() + '|' + (date || '');
+}
+
+const FULFILLED_STAGE_RE = /closed.won|invoiced|delivered|sublotted|manifested/i;
+
+// ─────────────────────────────────────────────
+// SALESFORCE ORDER HISTORY (order-level report export)
+// A grouped Salesforce report: Stage / Close Month appear only on the first
+// row of each group, and "Subtotal" / "Count" rows are interleaved. Columns
+// are found by header name. Each order becomes a CRM order with no line
+// items (family "Not itemized"); it is only used for orders that neither
+// OrdersLog nor the Salesforce line-item export has.
+// ─────────────────────────────────────────────
+function parseOrderHistory(raw) {
+  if (!raw || raw.length < 2) return [];
+  const norm = s => String(s || '').toLowerCase().replace(/[^a-z]/g, '');
+  const hdr = raw[0].map(norm);
+  const col = names => { for (const n of names) { const i = hdr.indexOf(n); if (i >= 0) return i; } return -1; };
+  const C = {
+    stage: col(['stage']), name: col(['opportunityname']), acct: col(['accountname']),
+    amount: col(['amount']), close: col(['closedate']), delivery: col(['deliverydate']),
+    submitted: col(['submitteddate']), method: col(['deliverymethod']),
+  };
+  if (C.name < 0 || C.acct < 0 || C.amount < 0 || C.close < 0) {
+    console.warn('[Sheets Loader] Order History: expected columns not found — skipped', raw[0]);
+    return [];
+  }
+  const iso = v => {
+    const d = new Date(v);
+    return v && !isNaN(d) && d.getFullYear() >= 2000 ? d.toISOString().slice(0, 10) : '';
+  };
+  const out = [];
+  let stage = '';
+  raw.slice(1).forEach(r => {
+    const s = String(r[C.stage] || '').trim();
+    if (s && s !== 'Subtotal') stage = s;
+    if (s === 'Subtotal') return;
+    const name = String(r[C.name] || '').trim();
+    const acct = String(r[C.acct] || '').trim();
+    if (!name || !acct || /^\d+$/.test(acct)) return;      // Count rows put the count in the name column
+    const close = iso(r[C.close]);
+    if (!close) return;
+    const amt = parseFloat(String(r[C.amount] || '0').replace(/[$,]/g, '')) || 0;
+    out.push({
+      a: acct, n: /^\d+$/.test(name) ? name : name + ' · ' + acct, r: Math.round(amt * 100) / 100,
+      s: /closed.won|delivered/i.test(stage) ? 'Closed Won' : stage,
+      dm: C.method >= 0 ? (r[C.method] || '') : '',
+      // Dated by Close Date (dd left blank) — the same basis as the Salesforce
+      // line-item export, so months line up across Salesforce sources.
+      sd: C.submitted >= 0 ? iso(r[C.submitted]) : '', d: close, pd: '', dd: '',
+      cm: close.slice(0, 7), em: '', po: '', il: '', ml: '', jl: '',
+      family: 'Not itemized', license: '', lineItems: [],
+      _isHistorical: true, _source: 'SF Order History', _key: orderKey(name, acct, close),
+    });
+  });
+  console.log('[Sheets Loader] Order History parsed:', out.length, 'orders');
+  return out;
+}
+
+// Merge every order source into one list, one record per real order.
+// Precedence: OrdersLog (Cultivera, line items) → Salesforce line items →
+// Salesforce Order History (totals only). When the Salesforce line-item
+// export froze an order mid-flight ("Purchase Order", "Submitted") but the
+// later Order History report shows it closed, the closed stage/date win so
+// the order counts as revenue while keeping its product detail.
+function mergeOrderSources(liveOpps, histOpps, ohOpps) {
+  const byKey = new Map();
+  const stats = { live: 0, lineHistory: 0, orderHistory: 0, stageUpgraded: 0 };
+  liveOpps.forEach(o => { o._source = o._source || 'Cultivera'; byKey.set(o._key, o); stats.live++; });
+  histOpps.forEach(o => {
+    if (byKey.has(o._key)) return;
+    o._source = 'SF line items'; byKey.set(o._key, o); stats.lineHistory++;
+  });
+  (ohOpps || []).forEach(o => {
+    const existing = byKey.get(o._key);
+    if (!existing) { byKey.set(o._key, o); stats.orderHistory++; return; }
+    if (existing._source === 'SF line items' && !FULFILLED_STAGE_RE.test(existing.s || '') && FULFILLED_STAGE_RE.test(o.s || '')) {
+      existing.s = o.s;
+      existing.d = o.d || existing.d;
+      existing.cm = (existing.d || '').slice(0, 7);
+      existing._stageFrom = 'SF Order History';
+      stats.stageUpgraded++;
+    }
+  });
+  window.ORDER_SOURCE_STATS = stats;
+  console.log('[Sheets Loader] Order sources merged:', stats);
+  return Array.from(byKey.values());
+}
+
+// ─────────────────────────────────────────────
+// ORDER DATA COVERAGE — read by the Reports tab
+// Finds stretches with no orders at all (a missing export, not a slow week)
+// and orders stuck in an open stage long after their date (a stale export
+// snapshot). Both make revenue look lower than it was, so Reports flags them
+// instead of silently showing low or $0 months.
+// ─────────────────────────────────────────────
+function buildOrderCoverage(opps) {
+  const GAP_DAYS = 10, STUCK_DAYS = 45, FROM = '2023-01-01';
+  const today = new Date().toISOString().slice(0, 10);
+  const stuckCutoff = new Date(Date.now() - STUCK_DAYS * 864e5).toISOString().slice(0, 10);
+  const days = new Set(), months = {};
+  opps.forEach(o => {
+    const dt = (o.dd || o.d || o.sd || '').slice(0, 10);
+    if (!dt || dt < FROM || dt > today) return;
+    days.add(dt);
+    const m = dt.slice(0, 7);
+    const mm = months[m] || (months[m] = { orders: 0, unitemizedRev: 0, stuck: 0, stuckRev: 0, stuckLive: 0, sources: {} });
+    mm.orders++;
+    mm.sources[o._source || 'Unknown'] = (mm.sources[o._source || 'Unknown'] || 0) + 1;
+    const fulfilled = FULFILLED_STAGE_RE.test(o.s || '');
+    if (fulfilled && !(o.lineItems || []).length && (o.r || 0) > 0) mm.unitemizedRev += o.r;
+    // Only real numbered orders. Named Salesforce entries like "Mar PO" are
+    // standing monthly POs whose deliveries are separate numbered orders.
+    if (!fulfilled && /^ORD-/.test(o._key || '') && dt < stuckCutoff && (o.r || 0) > 0 && !/sampl|cancel|lost|void/i.test(o.s || '')) {
+      mm.stuck++; mm.stuckRev += o.r;
+      if (o._source === 'Cultivera') mm.stuckLive++;
+    }
+  });
+  const sorted = Array.from(days).sort();
+  const gaps = [];
+  for (let i = 1; i < sorted.length; i++) {
+    const a = new Date(sorted[i - 1] + 'T12:00'), b = new Date(sorted[i] + 'T12:00');
+    const gap = Math.round((b - a) / 864e5);
+    if (gap > GAP_DAYS) {
+      const from = new Date(a.getTime() + 864e5).toISOString().slice(0, 10);
+      const to = new Date(b.getTime() - 864e5).toISOString().slice(0, 10);
+      gaps.push({ from, to, days: gap - 1 });
+    }
+  }
+  const lastDay = sorted[sorted.length - 1];
+  if (lastDay) {
+    const stale = Math.round((new Date(today + 'T12:00') - new Date(lastDay + 'T12:00')) / 864e5);
+    if (stale > GAP_DAYS) gaps.push({ from: lastDay, to: today, days: stale, open: true });
+  }
+  return { gaps, months, gapDays: GAP_DAYS, stuckDays: STUCK_DAYS, sources: window.ORDER_SOURCE_STATS || null };
+}
+
 function parseHistoricalOpps(rows) {
   if (rows.length > 0) {
     console.log('[Sheets Loader] Historical opps columns:', Object.keys(rows[0]));
@@ -1266,7 +1418,9 @@ function parseHistoricalOpps(rows) {
     const closeDate = normDate(r['Close Date']);
     if (closeDate && closeDate < HIST_CUTOFF) return;
 
-    const orderNum = r['Opportunity Name'] || `hist-${i}`;
+    const oppName = r['Opportunity Name'] || `hist-${i}`;
+    // Key by real order identity (see orderKey) — "Mar PO" is used by 60 stores
+    const orderNum = orderKey(oppName, r['Account Name'], closeDate);
     const price = parseFloat((r['Sales Price'] || '0').replace(/[$,]/g, '')) || 0;
     const qty = parseInt(r['Quantity']) || 0;
     const amt = price * qty;
@@ -1294,7 +1448,8 @@ function parseHistoricalOpps(rows) {
       const closeDate = normDate(r['Close Date']);
       orderMap[orderNum] = {
         a:   r['Account Name'] || '',
-        n:   orderNum,
+        n:   /^ORD-/.test(orderNum) ? oppName : oppName + ' · ' + (r['Account Name'] || ''),
+        _key: orderNum,
         r:   0,
         s:   stage,
         dm:  '',
@@ -1340,7 +1495,7 @@ function parseHistoricalOpps(rows) {
   const opps = Object.values(orderMap);
   opps.forEach(o => {
     o.r = Math.round(o.r * 100) / 100;
-    const fams = familyMap[o.n];
+    const fams = familyMap[o._key];
     if (fams && fams.size > 0) {
       o.family = [...fams][0];
       o.families = [...fams];
@@ -1858,9 +2013,14 @@ async function loadSheetsData() {
       try {
         showBanner('⟳ Loading historical data…', '#2563eb');
 
-        const [histRows, taskRows] = await Promise.all([
+        const [histRows, taskRows, ohRaw] = await Promise.all([
           fetchTab(SHEETS_CONFIG.tabs.historyOpps),
           fetchTab(SHEETS_CONFIG.tabs.tasks),
+          // Order-level Salesforce history fills months the line-item export
+          // missed. Optional: if it fails, the other sources still load.
+          fetchTabRaw(SHEETS_CONFIG.tabs.orderHistory).catch(e => {
+            console.warn('[Sheets Loader] Order History unavailable:', e.message); return [];
+          }),
         ]);
 
         // Parse in yielding chunks to avoid freezing the UI
@@ -1870,12 +2030,10 @@ async function loadSheetsData() {
         // (3) Auto: Invoice Follow-Up generated from invoiced opportunities.
         const sheetTasks = [];
 
-        // Merge live + historical
-        const liveOrderNums = new Set(liveOpps.map(o => o.n));
-        const mergedOpps = [
-          ...liveOpps,
-          ...histOpps.filter(o => !liveOrderNums.has(o.n)),
-        ];
+        // Merge live + Salesforce line items + Salesforce Order History,
+        // one record per order number (see mergeOrderSources)
+        const ohOpps = parseOrderHistory(ohRaw);
+        const mergedOpps = mergeOrderSources(liveOpps, histOpps, ohOpps);
         console.log('[Sheets Loader] Phase 2 — merged:', liveOpps.length, 'live +', histOpps.length, 'historical →', mergedOpps.length, 'total');
 
         // Re-enrich with full data
@@ -1924,7 +2082,8 @@ async function loadSheetsData() {
             var src = (typeof OPPS_DATA !== 'undefined' && OPPS_DATA) ? OPPS_DATA
                       : (window.OPPS_DATA || []);
             var invData = [];
-            var FULFILLED = /closed.won|invoiced|delivered|sublotted|manifested/i;
+            var FULFILLED = FULFILLED_STAGE_RE;
+            window.ORDER_COVERAGE = buildOrderCoverage(src);
             src.forEach(function(o) {
               if (!o || !FULFILLED.test(o.s || '')) return;
               // Date the invoice by delivery date, then close, then submitted.
@@ -1936,11 +2095,15 @@ async function loadSheetsData() {
               var month = (dt.getMonth() + 1) + '/1/' + dt.getFullYear();
               var items = o.lineItems || [];
               if (!items.length) {
-                // Order with no line-item detail — emit a single summary row
+                // Order with no line-item detail — emit a single summary row.
+                // Credits / zero orders are skipped, matching the line-item
+                // rule below (negative lines aren't counted as invoices).
+                if (!((o.r || 0) > 0)) return;
                 invData.push({
                   account: o.a || '', opp: o.n || '',
                   amount: o.r || 0, price: o.r || 0, qty: 0,
                   family: o.family || 'Other', month: month,
+                  source: o._source || '', itemized: false,
                 });
                 return;
               }
@@ -1956,6 +2119,8 @@ async function loadSheetsData() {
                   qty:     li.units || 0,
                   family:  li.family || 'Other',
                   month:   month,
+                  source:  o._source || '',
+                  itemized: true,
                 });
               });
             });

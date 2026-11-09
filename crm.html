@@ -2236,6 +2236,9 @@ select option { background: var(--surface-2); }
       <!-- Sales Reports (existing) -->
       <div id="rptSalesWrap">
 
+      <!-- Data coverage: flags missing order data before anyone reads the numbers -->
+      <div id="rptCoverage" style="margin-bottom:16px"></div>
+
       <!-- Top KPIs -->
       <div id="rptKpis" style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:20px"></div>
 
@@ -10234,6 +10237,56 @@ function toggleVarianceDetail(wk) {
 
 function renderPipeline() { renderReports(); }
 
+// ── Report data coverage ──
+// Built by sheets-loader (buildOrderCoverage). Shows, for the selected date
+// range: stretches with no orders from any source (red), orders frozen in an
+// open stage by a stale export (amber), and revenue that comes from order
+// totals without product detail (grey). Green when the range is complete.
+function renderReportCoverage(cutoff) {
+  var el = document.getElementById('rptCoverage');
+  var cov = window.ORDER_COVERAGE;
+  if (!el) return;
+  if (!cov) { el.innerHTML = ''; return; }
+  var fromIso = cutoff ? new Date(cutoff).toISOString().slice(0, 10) : '0000-00-00';
+  var fromMonth = fromIso.slice(0, 7);
+  var fmtD = function(iso) { return new Date(iso + 'T12:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }); };
+  var fmtM = function(m) { return new Date(m + '-01T12:00').toLocaleDateString('en-US', { month: 'short', year: 'numeric' }); };
+  var money = function(n) { return '$' + Math.round(n).toLocaleString(); };
+  var rows = [];
+
+  cov.gaps.filter(function(g) { return g.to >= fromIso; }).forEach(function(g) {
+    rows.push({ c: '#B91C1C', bg: '#FEE2E2', t: g.open
+      ? 'No new orders since ' + fmtD(g.from) + ' (' + g.days + ' days). The Cultivera order sync may have stopped.'
+      : 'No order data ' + fmtD(g.from) + ' – ' + fmtD(g.to) + ' (' + g.days + ' days). Revenue, invoices and accounts for these dates are missing from every number below.' });
+  });
+  var months = Object.keys(cov.months).filter(function(m) { return m >= fromMonth; }).sort();
+  months.forEach(function(m) {
+    var mm = cov.months[m];
+    if (mm.stuck > 0 && mm.stuckRev >= 1000) {
+      var live = mm.stuckLive || 0, frozen = mm.stuck - live;
+      var why = live && !frozen
+        ? 'They are still open in Cultivera: deliver/invoice or cancel them there.'
+        : !live ? 'These come from a Salesforce export taken before they closed; the Cultivera backfill replaces them with final status.'
+        : live + ' are still open in Cultivera; ' + frozen + ' come from a Salesforce export taken before they closed.';
+      rows.push({ c: '#92400E', bg: '#FEF3C7', t: fmtM(m) + ': ' + mm.stuck + ' orders (' + money(mm.stuckRev) + ') are still Submitted / PO / Preorder more than ' + cov.stuckDays + ' days later, so they are not counted as revenue. ' + why });
+    }
+  });
+  var unit = months.filter(function(m) { return cov.months[m].unitemizedRev > 0; });
+  if (unit.length) {
+    var tot = unit.reduce(function(s, m) { return s + cov.months[m].unitemizedRev; }, 0);
+    rows.push({ c: '#475569', bg: '#F1F5F9', t: money(tot) + ' in ' + unit.map(fmtM).join(', ') + ' comes from Salesforce order totals. It is included in revenue, invoices and accounts, but has no product detail (shown as "Not itemized").' });
+  }
+
+  if (!rows.length) {
+    el.innerHTML = '<div style="font-size:11px;color:#166534;background:#DCFCE7;border-radius:8px;padding:6px 12px;display:inline-block">✓ Order data is complete for this date range</div>';
+    return;
+  }
+  el.innerHTML = '<div style="border:1px solid var(--border);border-radius:var(--radius);overflow:hidden">'
+    + '<div style="font-size:10px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:var(--text-faint);font-family:\'Space Mono\',monospace;padding:8px 12px;background:var(--surface-2);border-bottom:1px solid var(--border)">DATA COVERAGE</div>'
+    + rows.map(function(r) { return '<div style="font-size:12px;line-height:1.45;padding:8px 12px;color:' + r.c + ';background:' + r.bg + ';border-bottom:1px solid rgba(0,0,0,0.04)">' + r.t + '</div>'; }).join('')
+    + '</div>';
+}
+
 function renderReports() {
   var data = window.INVOICE_DATA;
   if (!data || !data.length) {
@@ -10338,6 +10391,8 @@ function renderReports() {
 
   var sub = document.getElementById('reportsPageSub');
   if (sub) sub.textContent = filtered.length.toLocaleString()+' line items across '+Object.keys(allInvoices).length.toLocaleString()+' invoices'+acctContext;
+
+  renderReportCoverage(cutoff);
 
   // ── KPI Cards ──
   var kpiEl = document.getElementById('rptKpis');
